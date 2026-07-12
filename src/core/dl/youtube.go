@@ -210,10 +210,9 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		"--no-warnings",
 		"--quiet",
 		"--no-playlist",
-		"--geo-bypass",
-		"--socket-timeout", "8",
-		"--retries", "1",
-		"--extractor-args", "youtube:player_js_version=actual",
+		"--socket-timeout", "5",
+		"--retries", "0",
+		"--extractor-args", "youtube:player_client=android_vr",
 	}
 
 	if video {
@@ -230,7 +229,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		)
 	}
 
-	args = append(args, "--get-url")
+	args = append(args, "--print", "urls")
 
 	cookieFile := y.getCookieFile()
 	if cookieFile != "" {
