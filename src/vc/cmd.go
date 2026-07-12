@@ -44,7 +44,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		audioCmd.WriteString(filterFlags + " ")
 	}
 
-	audioCmd.WriteString(fmt.Sprintf("-f s16le -ac %d -ar %d -v quiet pipe:1",
+	audioCmd.WriteString(fmt.Sprintf("-f s16le -ac %d -ar %d -v warning pipe:1",
 		audioDescription.ChannelCount,
 		audioDescription.SampleRate,
 	))
@@ -105,7 +105,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		videoCmd.WriteString(filterFlags + " ")
 	}
 
-	videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v quiet pipe:1",
+	videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v warning pipe:1",
 		videoDescription.Fps,
 		videoDescription.Width,
 		videoDescription.Height,
