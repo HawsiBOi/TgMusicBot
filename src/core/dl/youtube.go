@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // youTubeData provides an interface for fetching track and playlist information from YouTube.
@@ -162,34 +163,89 @@ func (y *youTubeData) getTrack() (utils.TrackInfo, error) {
 	return trackInfo, nil
 }
 
+var (
+	youtubeRequestMu   sync.Mutex
+	lastYouTubeRequest time.Time
+)
+
+func waitForYouTubeRequest() {
+	youtubeRequestMu.Lock()
+	defer youtubeRequestMu.Unlock()
+
+	const minimumDelay = 7 * time.Second
+
+	elapsed := time.Since(lastYouTubeRequest)
+	if !lastYouTubeRequest.IsZero() && elapsed < minimumDelay {
+		delay := minimumDelay - elapsed
+
+		slog.Info(
+			"[YouTube] Waiting before next request",
+			"delay", delay,
+		)
+
+		time.Sleep(delay)
+	}
+
+	lastYouTubeRequest = time.Now()
+}
+
+func isYouTubeRateLimited(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	text := strings.ToLower(err.Error())
+
+	return strings.Contains(text, "rate-limited") ||
+		strings.Contains(text, "rate limited") ||
+		strings.Contains(text, "too many requests") ||
+		strings.Contains(text, "http error 429") ||
+		strings.Contains(text, "this content isn't available, try again later")
+}
+
 // downloadTrack handles the download of a track from YouTube.
 func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, error) {
-	// LOW LATENCY: resolve a direct YouTube media URL first.
-	// NTgCalls can stream URLs directly without waiting for full download.
+	waitForYouTubeRequest()
+
 	resolveStart := time.Now()
+
 	streamURL, resolveErr := y.resolveDirectMediaURL(info.Id, video)
+
 	slog.Info(
 		"[LATENCY] YouTube direct resolve finished",
 		"duration", time.Since(resolveStart),
 		"video_id", info.Id,
 		"video", video,
 	)
+
 	if resolveErr == nil && streamURL != "" {
 		slog.Info(
 			"[YouTube] Using low-latency direct stream",
 			"video_id", info.Id,
 			"video", video,
 		)
+
 		return streamURL, nil
 	}
 
-	slog.Warn(
-		fmt.Sprintf(
-			"[YouTube] Direct stream resolve failed: %v | video_id=%s | video=%t | falling back to download",
+	if isYouTubeRateLimited(resolveErr) {
+		slog.Warn(
+			"[YouTube] Session rate limited; download fallback skipped",
+			"video_id", info.Id,
+			"error", resolveErr,
+		)
+
+		return "", fmt.Errorf(
+			"YouTube session is temporarily rate limited: %w",
 			resolveErr,
-			info.Id,
-			video,
-		),
+		)
+	}
+
+	slog.Warn(
+		"[YouTube] Direct stream failed; using download fallback",
+		"video_id", info.Id,
+		"video", video,
+		"error", resolveErr,
 	)
 
 	if !video && y.ApiUrl != "" && y.APIKey != "" {
@@ -197,6 +253,8 @@ func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, e
 			return filePath, nil
 		}
 	}
+
+	waitForYouTubeRequest()
 
 	return y.downloadWithYtDlp(info.Id, video)
 }
@@ -209,106 +267,108 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 	videoURL := "https://www.youtube.com/watch?v=" + videoID
 	cookieFile := y.getCookieFile()
 
-	resolve := func(cookie string) (string, error) {
-		args := []string{
-			"--no-warnings",
-			"--quiet",
-			"--no-playlist",
-			"--geo-bypass",
-			"--socket-timeout", "6",
-			"--retries", "1",
-			"--extractor-args", "youtube:player_js_version=actual",
-		}
-
-		if video {
-			args = append(args,
-				"-f",
-				"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio",
-				"--get-url",
-			)
-		} else {
-			args = append(args,
-				"-f", "bestaudio[ext=m4a]/bestaudio",
-				"--get-url",
-			)
-		}
-
-		if cookie != "" {
-			args = append(args, "--cookies", cookie)
-		} else if config.Proxy != "" {
-			args = append(args, "--proxy", config.Proxy)
-		}
-
-		args = append(args, videoURL)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-		defer cancel()
-
-		cmd := exec.CommandContext(ctx, "yt-dlp", args...)
-		output, err := cmd.Output()
-
-		if err != nil {
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", errors.New("direct stream resolve timed out")
-			}
-
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				return "", fmt.Errorf(
-					"yt-dlp direct resolve failed: %s",
-					strings.TrimSpace(string(exitErr.Stderr)),
-				)
-			}
-
-			return "", err
-		}
-
-		rawOutput := strings.TrimSpace(string(output))
-		if rawOutput == "" {
-			return "", errors.New("yt-dlp returned empty URL")
-		}
-
-		var urls []string
-		for _, line := range strings.Split(rawOutput, "\n") {
-			line = strings.TrimSpace(line)
-			if line != "" {
-				urls = append(urls, line)
-			}
-		}
-
-		if video {
-			if len(urls) < 2 {
-				return "", errors.New("separate video/audio URLs not returned")
-			}
-			return urls[0] + "|||HAWSI_DUAL_STREAM|||" + urls[1], nil
-		}
-
-		return urls[0], nil
+	args := []string{
+		"--no-warnings",
+		"--no-playlist",
+		"--geo-bypass",
+		"--socket-timeout", "10",
+		"--retries", "0",
+		"--extractor-retries", "0",
+		"--js-runtimes", "deno:/usr/local/bin/deno",
+		"--extractor-args", "youtube:player_js_version=actual",
 	}
 
-	streamURL, err := resolve(cookieFile)
-	if err == nil {
-		return streamURL, nil
+	if video {
+		args = append(
+			args,
+			"-f",
+			"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=720]",
+			"--get-url",
+		)
+	} else {
+		args = append(
+			args,
+			"-f",
+			"bestaudio[ext=m4a]/bestaudio",
+			"--get-url",
+		)
 	}
 
 	if cookieFile != "" {
-		errText := strings.ToLower(err.Error())
+		args = append(args, "--cookies", cookieFile)
+	} else if config.Proxy != "" {
+		args = append(args, "--proxy", config.Proxy)
+	}
 
-		if strings.Contains(errText, "sign in") ||
-			strings.Contains(errText, "not a bot") ||
-			strings.Contains(errText, "cookies") {
+	args = append(args, videoURL)
 
-			slog.Warn("[YouTube] Bad cookie detected, retrying without cookie",
-				"cookie", cookieFile,
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		20*time.Second,
+	)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", errors.New("direct stream resolve timed out")
+		}
+
+		var exitErr *exec.ExitError
+
+		if errors.As(err, &exitErr) {
+			stderr := strings.TrimSpace(string(exitErr.Stderr))
+
+			return "", fmt.Errorf(
+				"yt-dlp direct resolve failed: %s",
+				stderr,
 			)
+		}
 
-			_ = os.Remove(cookieFile)
+		return "", fmt.Errorf(
+			"yt-dlp direct resolve failed: %w",
+			err,
+		)
+	}
 
-			return resolve("")
+	rawOutput := strings.TrimSpace(string(output))
+
+	if rawOutput == "" {
+		return "", errors.New("yt-dlp returned empty URL")
+	}
+
+	var urls []string
+
+	for _, line := range strings.Split(rawOutput, "
+") {
+		line = strings.TrimSpace(line)
+
+		if strings.HasPrefix(line, "http://") ||
+			strings.HasPrefix(line, "https://") {
+			urls = append(urls, line)
 		}
 	}
 
-	return "", err
+	if video {
+		if len(urls) < 2 {
+			return "", fmt.Errorf(
+				"separate video/audio URLs not returned; got %d URL(s)",
+				len(urls),
+			)
+		}
+
+		return urls[0] +
+			"|||HAWSI_DUAL_STREAM|||" +
+			urls[1], nil
+	}
+
+	if len(urls) == 0 {
+		return "", errors.New("audio stream URL not returned")
+	}
+
+	return urls[0], nil
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
@@ -321,10 +381,10 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		"--no-warnings",
 		"--quiet",
 		"--geo-bypass",
-		"--retries", "2",
+		"--retries", "0",
 		"--continue",
 		"--no-part",
-		"--concurrent-fragments", "3",
+		"--concurrent-fragments", "1",
 		"--socket-timeout", "10",
 		"--throttled-rate", "100K",
 		"--retry-sleep", "1",
