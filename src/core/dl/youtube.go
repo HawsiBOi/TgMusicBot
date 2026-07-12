@@ -220,7 +220,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		// both video and audio for direct NTgCalls streaming.
 		args = append(args,
 			"-f",
-			"best[height<=720][vcodec!=none][acodec!=none]/best[height<=480][vcodec!=none][acodec!=none]",
+			"best[height>=720][height<=1080][vcodec^=avc1][acodec!=none]/best[height<=720][vcodec^=avc1][acodec!=none]/best[height<=720][vcodec!=none][acodec!=none]",
 		)
 	} else {
 		args = append(args,
