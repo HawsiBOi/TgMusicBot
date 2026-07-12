@@ -341,8 +341,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 
 	var urls []string
 
-	for _, line := range strings.Split(rawOutput, "
-") {
+	for _, line := range strings.Split(rawOutput, "\n") {
 		line = strings.TrimSpace(line)
 
 		if strings.HasPrefix(line, "http://") ||
