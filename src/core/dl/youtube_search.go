@@ -284,13 +284,32 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 		"--quiet",
 		"--ignore-errors",
 		"--no-check-formats",
+		"--sleep-requests", "1",
+		"--extractor-retries", "1",
+		"--socket-timeout", "10",
 		playlistURL,
 	}
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+
 	output, err := cmd.Output()
 	if err != nil {
-		return utils.PlatformTracks{}, fmt.Errorf("yt-dlp playlist extraction failed: %w", err)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return utils.PlatformTracks{}, errors.New("YouTube playlist extraction timed out")
+		}
+
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return utils.PlatformTracks{}, fmt.Errorf(
+				"yt-dlp playlist extraction failed: %s",
+				strings.TrimSpace(string(exitErr.Stderr)),
+			)
+		}
+
+		return utils.PlatformTracks{}, fmt.Errorf(
+			"yt-dlp playlist extraction failed: %w",
+			err,
+		)
 	}
 
 	var data struct {
@@ -305,24 +324,39 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 	}
 
 	if err := json.Unmarshal(output, &data); err != nil {
-		return utils.PlatformTracks{}, fmt.Errorf("decode yt-dlp playlist: %w", err)
+		return utils.PlatformTracks{}, fmt.Errorf(
+			"decode yt-dlp playlist: %w",
+			err,
+		)
 	}
 
 	tracks := make([]utils.MusicTrack, 0, len(data.Entries))
+	seen := make(map[string]bool)
 
 	for _, entry := range data.Entries {
 		if entry.ID == "" {
 			continue
 		}
 
+		if seen[entry.ID] {
+			continue
+		}
+
+		seen[entry.ID] = true
+
 		channel := entry.Channel
 		if channel == "" {
 			channel = entry.Uploader
 		}
 
+		title := entry.Title
+		if title == "" {
+			title = entry.ID
+		}
+
 		tracks = append(tracks, utils.MusicTrack{
 			Id:        entry.ID,
-			Title:     entry.Title,
+			Title:     title,
 			Url:       ytWatchURL + entry.ID,
 			Thumbnail: entry.Thumbnail,
 			Channel:   channel,
@@ -332,15 +366,19 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 	}
 
 	if len(tracks) == 0 {
-		return utils.PlatformTracks{}, errors.New("no videos found in YouTube playlist")
+		return utils.PlatformTracks{},
+			errors.New("no videos found in YouTube playlist")
 	}
 
-	slog.Info("[YouTube] Playlist extracted with yt-dlp",
+	slog.Info(
+		"[YouTube] Playlist extracted with yt-dlp",
 		"playlist_id", playlistID,
 		"tracks", len(tracks),
 	)
 
-	return utils.PlatformTracks{Results: tracks}, nil
+	return utils.PlatformTracks{
+		Results: tracks,
+	}, nil
 }
 
 func getYouTubeMixPlaylist(ctx context.Context, playlistID string) (utils.PlatformTracks, error) {
