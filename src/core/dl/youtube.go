@@ -179,6 +179,7 @@ func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, e
 		"[YouTube] Direct stream resolve failed, falling back to download",
 		"video_id", info.Id,
 		"video", video,
+		"error", err,
 	)
 
 	if !video && y.ApiUrl != "" && y.APIKey != "" {
