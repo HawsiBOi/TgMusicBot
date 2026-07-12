@@ -87,7 +87,7 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 				return td.EndGroups
 			}
 
-			if err := vc.Calls.PlayMedia(c, chatID, liveInfo.StreamURL, true, "-rw_timeout 15000000"); err != nil {
+			if err := vc.Calls.PlayMedia(c, chatID, liveInfo.StreamURL, true, "-rw_timeout 15000000 -live_start_index -1"); err != nil {
 				_, _ = updater.EditText(c, fmt.Sprintf("❌ Hawsi Live Failed: %s", err.Error()), nil)
 				return td.EndGroups
 			}

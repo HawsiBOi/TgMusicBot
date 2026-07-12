@@ -19,10 +19,12 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 
 	quotedPath := fmt.Sprintf("\"%s\"", filePath)
 	isURL := isURLRegex.MatchString(filePath)
+	isLiveHLS := strings.Contains(strings.ToLower(filePath), ".m3u8") ||
+		strings.Contains(strings.ToLower(filePath), "manifest.googlevideo.com")
 
 	var audioCmd strings.Builder
 	audioCmd.WriteString("ffmpeg ")
-	if isURL {
+	if isURL && !isLiveHLS {
 		audioCmd.WriteString("-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
 	}
 
@@ -92,7 +94,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 	var videoCmd strings.Builder
 	videoCmd.WriteString("ffmpeg ")
 
-	if isURL {
+	if isURL && !isLiveHLS {
 		videoCmd.WriteString("-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
 	}
 
