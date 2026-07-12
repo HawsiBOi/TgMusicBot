@@ -164,6 +164,23 @@ func (y *youTubeData) getTrack() (utils.TrackInfo, error) {
 
 // downloadTrack handles the download of a track from YouTube.
 func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, error) {
+	// LOW LATENCY: resolve a direct YouTube media URL first.
+	// NTgCalls can stream URLs directly without waiting for full download.
+	if streamURL, err := y.resolveDirectMediaURL(info.Id, video); err == nil && streamURL != "" {
+		slog.Info(
+			"[YouTube] Using low-latency direct stream",
+			"video_id", info.Id,
+			"video", video,
+		)
+		return streamURL, nil
+	}
+
+	slog.Warn(
+		"[YouTube] Direct stream resolve failed, falling back to download",
+		"video_id", info.Id,
+		"video", video,
+	)
+
 	if !video && y.ApiUrl != "" && y.APIKey != "" {
 		if filePath, err := y.downloadWithApi(info.Id, video); err == nil {
 			return filePath, nil
@@ -171,6 +188,85 @@ func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, e
 	}
 
 	return y.downloadWithYtDlp(info.Id, video)
+}
+
+func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string, error) {
+	if videoID == "" {
+		return "", errors.New("videoID is empty")
+	}
+
+	videoURL := "https://www.youtube.com/watch?v=" + videoID
+
+	args := []string{
+		"--no-warnings",
+		"--quiet",
+		"--no-playlist",
+		"--geo-bypass",
+		"--socket-timeout", "8",
+		"--retries", "1",
+		"--extractor-args", "youtube:player_js_version=actual",
+	}
+
+	if video {
+		// Progressive format is required here so one URL contains
+		// both video and audio for direct NTgCalls streaming.
+		args = append(args,
+			"-f",
+			"best[height<=720][vcodec!=none][acodec!=none]/best[height<=480][vcodec!=none][acodec!=none]",
+		)
+	} else {
+		args = append(args,
+			"-f",
+			"bestaudio[ext=m4a]/bestaudio",
+		)
+	}
+
+	args = append(args, "--get-url")
+
+	cookieFile := y.getCookieFile()
+	if cookieFile != "" {
+		args = append(args, "--cookies", cookieFile)
+	} else if config.Proxy != "" {
+		args = append(args, "--proxy", config.Proxy)
+	}
+
+	args = append(args, videoURL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", fmt.Errorf("direct stream resolve timed out for video ID: %s", videoID)
+		}
+
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf(
+				"yt-dlp direct resolve failed: %s",
+				strings.TrimSpace(string(exitErr.Stderr)),
+			)
+		}
+
+		return "", fmt.Errorf("direct stream resolve failed: %w", err)
+	}
+
+	streamURL := strings.TrimSpace(string(output))
+	if streamURL == "" {
+		return "", errors.New("yt-dlp returned an empty direct stream URL")
+	}
+
+	// Direct playback requires exactly one media URL.
+	lines := strings.Split(streamURL, "\n")
+	streamURL = strings.TrimSpace(lines[0])
+
+	if streamURL == "" {
+		return "", errors.New("resolved direct stream URL is empty")
+	}
+
+	return streamURL, nil
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
