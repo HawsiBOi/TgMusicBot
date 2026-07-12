@@ -320,25 +320,33 @@ func mapPlayerToTrack(src map[string]any) utils.MusicTrack {
 }
 
 func extractPlaylistVideos(src map[string]any) []map[string]any {
-	contents := digArray(src,
-		"contents",
-		"twoColumnBrowseResultsRenderer",
-		"tabs", 0,
-		"tabRenderer",
-		"content",
-		"sectionListRenderer",
-		"contents", 0,
-		"itemSectionRenderer",
-		"contents", 0,
-		"playlistVideoListRenderer",
-		"contents",
-	)
 	var out []map[string]any
-	for _, c := range contents {
-		if v, ok := c["playlistVideoRenderer"].(map[string]any); ok {
-			out = append(out, v)
+	seen := make(map[string]bool)
+
+	var walk func(any)
+	walk = func(node any) {
+		switch value := node.(type) {
+		case map[string]any:
+			if renderer, ok := value["playlistVideoRenderer"].(map[string]any); ok {
+				videoID := digStr(renderer, "videoId")
+				if videoID != "" && !seen[videoID] {
+					seen[videoID] = true
+					out = append(out, renderer)
+				}
+			}
+
+			for _, child := range value {
+				walk(child)
+			}
+
+		case []any:
+			for _, child := range value {
+				walk(child)
+			}
 		}
 	}
+
+	walk(src)
 	return out
 }
 
