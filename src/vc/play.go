@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	td "github.com/AshokShau/gotdbot"
 )
@@ -104,18 +105,24 @@ func (c *TelegramCalls) playMedia(bot *td.Client, chatID int64, filePath string,
 		return errors.New("private calls are not supported for media playback")
 	}
 
+	joinStart := time.Now()
 	if err := c.joinAssistant(bot, chatID, call, index); err != nil {
 		cache.ChatCache.ClearChat(chatID)
 		return err
 	}
 
+	logger.Info("[LATENCY] Assistant join finished", "duration", time.Since(joinStart), "chatID", chatID)
+
 	logger.Debug("Playing media in chat", "id", chatID, "path", filePath, "index", index)
 
 	mediaDesc := getMediaDescription(filePath, video, ffmpegParameters)
+	playStart := time.Now()
 	if err := call.Play(context.Background(), chatID, mediaDesc); err != nil {
 		cache.ChatCache.ClearChat(chatID)
 		return err
 	}
+
+	logger.Info("[LATENCY] NTgCalls Play finished", "duration", time.Since(playStart), "chatID", chatID)
 
 	if db.Instance.GetLoggerStatus() {
 		go sendLogger(bot, chatID, cache.ChatCache.GetPlayingTrack(chatID))

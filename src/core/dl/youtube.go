@@ -166,7 +166,14 @@ func (y *youTubeData) getTrack() (utils.TrackInfo, error) {
 func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, error) {
 	// LOW LATENCY: resolve a direct YouTube media URL first.
 	// NTgCalls can stream URLs directly without waiting for full download.
+	resolveStart := time.Now()
 	streamURL, resolveErr := y.resolveDirectMediaURL(info.Id, video)
+	slog.Info(
+		"[LATENCY] YouTube direct resolve finished",
+		"duration", time.Since(resolveStart),
+		"video_id", info.Id,
+		"video", video,
+	)
 	if resolveErr == nil && streamURL != "" {
 		slog.Info(
 			"[YouTube] Using low-latency direct stream",
