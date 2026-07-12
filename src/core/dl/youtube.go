@@ -205,89 +205,108 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 	}
 
 	videoURL := "https://www.youtube.com/watch?v=" + videoID
-
-	args := []string{
-		"--no-warnings",
-		"--quiet",
-		"--no-playlist",
-		"--geo-bypass",
-		"--socket-timeout", "8",
-		"--retries", "1",
-		"--extractor-args", "youtube:player_js_version=actual",
-	}
-
-	if video {
-		// Resolve separate high-quality video and audio URLs.
-		args = append(
-			args,
-			"-f",
-			"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio",
-			"--get-url",
-		)
-	} else {
-		args = append(
-			args,
-			"-f",
-			"bestaudio[ext=m4a]/bestaudio",
-			"--get-url",
-		)
-	}
-
 	cookieFile := y.getCookieFile()
-	if cookieFile != "" {
-		args = append(args, "--cookies", cookieFile)
-	} else if config.Proxy != "" {
-		args = append(args, "--proxy", config.Proxy)
-	}
 
-	args = append(args, videoURL)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", fmt.Errorf("direct stream resolve timed out for video ID: %s", videoID)
+	resolve := func(cookie string) (string, error) {
+		args := []string{
+			"--no-warnings",
+			"--quiet",
+			"--no-playlist",
+			"--geo-bypass",
+			"--socket-timeout", "6",
+			"--retries", "1",
+			"--extractor-args", "youtube:player_js_version=actual",
 		}
 
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return "", fmt.Errorf(
-				"yt-dlp direct resolve failed: %s",
-				strings.TrimSpace(string(exitErr.Stderr)),
+		if video {
+			args = append(args,
+				"-f",
+				"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio",
+				"--get-url",
+			)
+		} else {
+			args = append(args,
+				"-f", "bestaudio[ext=m4a]/bestaudio",
+				"--get-url",
 			)
 		}
 
-		return "", fmt.Errorf("direct stream resolve failed: %w", err)
+		if cookie != "" {
+			args = append(args, "--cookies", cookie)
+		} else if config.Proxy != "" {
+			args = append(args, "--proxy", config.Proxy)
+		}
+
+		args = append(args, videoURL)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+		output, err := cmd.Output()
+
+		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return "", errors.New("direct stream resolve timed out")
+			}
+
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				return "", fmt.Errorf(
+					"yt-dlp direct resolve failed: %s",
+					strings.TrimSpace(string(exitErr.Stderr)),
+				)
+			}
+
+			return "", err
+		}
+
+		rawOutput := strings.TrimSpace(string(output))
+		if rawOutput == "" {
+			return "", errors.New("yt-dlp returned empty URL")
+		}
+
+		var urls []string
+		for _, line := range strings.Split(rawOutput, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				urls = append(urls, line)
+			}
+		}
+
+		if video {
+			if len(urls) < 2 {
+				return "", errors.New("separate video/audio URLs not returned")
+			}
+			return urls[0] + "|||HAWSI_DUAL_STREAM|||" + urls[1], nil
+		}
+
+		return urls[0], nil
 	}
 
-	rawOutput := strings.TrimSpace(string(output))
-	if rawOutput == "" {
-		return "", errors.New("yt-dlp returned an empty direct stream URL")
+	streamURL, err := resolve(cookieFile)
+	if err == nil {
+		return streamURL, nil
 	}
 
-	lines := strings.Split(rawOutput, "\n")
-	var urls []string
+	if cookieFile != "" {
+		errText := strings.ToLower(err.Error())
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			urls = append(urls, line)
+		if strings.Contains(errText, "sign in") ||
+			strings.Contains(errText, "not a bot") ||
+			strings.Contains(errText, "cookies") {
+
+			slog.Warn("[YouTube] Bad cookie detected, retrying without cookie",
+				"cookie", cookieFile,
+			)
+
+			_ = os.Remove(cookieFile)
+
+			return resolve("")
 		}
 	}
 
-	if video {
-		if len(urls) < 2 {
-			return "", errors.New("yt-dlp did not return separate video and audio URLs")
-		}
-
-		// video URL ||| audio URL
-		return urls[0] + "|||HAWSI_DUAL_STREAM|||" + urls[1], nil
-	}
-
-	return urls[0], nil
+	return "", err
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
