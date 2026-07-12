@@ -86,7 +86,7 @@ func init() {
 			slog.Error("Failed to create temp dir for cookies", "error", err)
 			os.Exit(1)
 		}
-		go saveAllCookies(cookiesUrl)
+		saveAllCookies(cookiesUrl)
 	}
 }
 
