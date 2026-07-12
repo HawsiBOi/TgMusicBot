@@ -47,8 +47,6 @@ var SourceCodeBtn = url("Source Code", "https://github.com/AshokShau/TgMusicBot"
 
 func SupportKeyboard() *gotdbot.ReplyMarkupInlineKeyboard {
 
-	
-
 	return &gotdbot.ReplyMarkupInlineKeyboard{
 		Rows: [][]gotdbot.InlineKeyboardButton{
 			{CloseBtn},
@@ -131,28 +129,28 @@ func BackHelpMenuKeyboard() *gotdbot.ReplyMarkupInlineKeyboard {
 }
 
 func ControlButtons(mode string) *gotdbot.ReplyMarkupInlineKeyboard {
-	skipBtn := cb("‣‣I", "play_skip")
-	stopBtn := cb("▢", "play_stop")
-	pauseBtn := cb("II", "play_pause")
-	resumeBtn := cb("▷", "play_resume")
-	muteBtn := cb("🔇", "play_mute")
-	unmuteBtn := cb("🔊", "play_unmute")
-	addToPlaylistBtn := cb("➕", "play_add_to_list")
+	skipBtn := cb("Next  ›", "play_skip")
+	stopBtn := cb("Stop  ◼", "play_stop")
+	pauseBtn := cb("Pause  Ⅱ", "play_pause")
+	resumeBtn := cb("Play  ▶", "play_resume")
+	muteBtn := cb("Mute  ◌", "play_mute")
+	unmuteBtn := cb("Sound  ◉", "play_unmute")
+	addToPlaylistBtn := cb("♡  Save to Playlist", "play_add_to_list")
 
 	switch mode {
-
 	case "play":
 		return &gotdbot.ReplyMarkupInlineKeyboard{
 			Rows: [][]gotdbot.InlineKeyboardButton{
-				{skipBtn, stopBtn, pauseBtn},
-				{addToPlaylistBtn, CloseBtn},
+				{pauseBtn, skipBtn, stopBtn},
+				{addToPlaylistBtn},
+				{CloseBtn},
 			},
 		}
 
 	case "pause":
 		return &gotdbot.ReplyMarkupInlineKeyboard{
 			Rows: [][]gotdbot.InlineKeyboardButton{
-				{skipBtn, stopBtn, resumeBtn},
+				{resumeBtn, skipBtn, stopBtn},
 				{CloseBtn},
 			},
 		}
@@ -160,7 +158,7 @@ func ControlButtons(mode string) *gotdbot.ReplyMarkupInlineKeyboard {
 	case "resume":
 		return &gotdbot.ReplyMarkupInlineKeyboard{
 			Rows: [][]gotdbot.InlineKeyboardButton{
-				{skipBtn, stopBtn, pauseBtn},
+				{pauseBtn, skipBtn, stopBtn},
 				{CloseBtn},
 			},
 		}
@@ -168,7 +166,7 @@ func ControlButtons(mode string) *gotdbot.ReplyMarkupInlineKeyboard {
 	case "mute":
 		return &gotdbot.ReplyMarkupInlineKeyboard{
 			Rows: [][]gotdbot.InlineKeyboardButton{
-				{skipBtn, stopBtn, unmuteBtn},
+				{unmuteBtn, skipBtn, stopBtn},
 				{CloseBtn},
 			},
 		}
@@ -176,7 +174,7 @@ func ControlButtons(mode string) *gotdbot.ReplyMarkupInlineKeyboard {
 	case "unmute":
 		return &gotdbot.ReplyMarkupInlineKeyboard{
 			Rows: [][]gotdbot.InlineKeyboardButton{
-				{skipBtn, stopBtn, muteBtn},
+				{muteBtn, skipBtn, stopBtn},
 				{CloseBtn},
 			},
 		}

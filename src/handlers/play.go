@@ -368,7 +368,7 @@ func handleSingleTrack(c *td.Client, m *td.Message, updater *td.Message, song ut
 	escUsernp := html.EscapeString(saveCache.User)
 
 	nowPlaying := fmt.Sprintf(
-		"<u><b>| Started streaming</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+		"🟣 <b>HAWSI</b>\n<blockquote><b>Started streaming</b></blockquote>\n🎵 <a href='%s'><b>%s</b></a>\n\n🟦 <b>Duration</b>  ·  %s min\n🩵 <b>Requested by</b>  ·  %s\n\n🟢 <b>Direct Stream</b>  ·  Active",
 		escURLnp, escNamenp, utils.SecToMin(song.Duration), escUsernp,
 	)
 
