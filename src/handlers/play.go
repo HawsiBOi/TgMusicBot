@@ -49,13 +49,13 @@ func vPlayHandler(c *td.Client, m *td.Message) error {
 func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 	chatID := m.ChatId
 
-        if queueLen := cache.ChatCache.GetQueueLength(chatID); queueLen >= 69 {
-        _, _ = m.ReplyText(c,
-                "🚫 <b>Hawsi Log Rukk Jao... l!</b>\n\n69 songs Already Hai Queue Pe. 😵‍💫\n\n🗑️ Use <code>/end</code> to clear the queue.",
-                &td.SendTextMessageOpts{ParseMode: "HTML"},
-        )
-        return td.EndGroups
-}
+	if queueLen := cache.ChatCache.GetQueueLength(chatID); queueLen >= 69 {
+		_, _ = m.ReplyText(c,
+			"🚫 <b>Hawsi Log Rukk Jao... l!</b>\n\n69 songs Already Hai Queue Pe. 😵‍💫\n\n🗑️ Use <code>/end</code> to clear the queue.",
+			&td.SendTextMessageOpts{ParseMode: "HTML"},
+		)
+		return td.EndGroups
+	}
 
 	isReply := m.ReplyToMessageID() != 0
 	args := Args(m)
@@ -71,6 +71,45 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 	}
 
 	input := coalesce(url, args)
+
+	// YouTube Live direct streaming.
+	if isVideo && isYouTubeURL(input) {
+		liveInfo, liveErr := dl.ResolveYouTubeLive(input)
+
+		if liveErr != nil {
+			_, _ = m.ReplyText(c, fmt.Sprintf("❌ Hawsi Live Resolver Error: %s", liveErr.Error()), nil)
+			return td.EndGroups
+		}
+
+		if liveInfo != nil && liveInfo.IsLive {
+			updater, err := m.ReplyText(c, "📡 Hawsi Live Ko Pakad Raha Hu... Ruko Jara...", nil)
+			if err != nil {
+				return td.EndGroups
+			}
+
+			if err := vc.Calls.PlayMedia(c, chatID, liveInfo.StreamURL, true, "-rw_timeout 15000000"); err != nil {
+				_, _ = updater.EditText(c, fmt.Sprintf("❌ Hawsi Live Failed: %s", err.Error()), nil)
+				return td.EndGroups
+			}
+
+			title := html.EscapeString(liveInfo.Title)
+			sourceURL := html.EscapeString(input)
+			user := html.EscapeString(firstName(c, m))
+
+			liveText := fmt.Sprintf(
+				"<u><b>🔴 Hawsi Live Shuru...</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Status:</b> LIVE 🔴\n<b>Requested by:</b> %s",
+				sourceURL, title, user,
+			)
+
+			_, _ = updater.EditText(c, liveText, &td.EditTextMessageOpts{
+				ReplyMarkup:           core.ControlButtons("play"),
+				ParseMode:             "HTML",
+				DisableWebPagePreview: true,
+			})
+
+			return td.EndGroups
+		}
+	}
 
 	if strings.HasPrefix(input, "tgpl_") {
 		playlist, err := db.Instance.GetPlaylist(input)
@@ -150,6 +189,12 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 	}
 
 	return handleTextSearch(c, m, updater, wrapper, chatID, isVideo)
+}
+
+func isYouTubeURL(input string) bool {
+	lower := strings.ToLower(input)
+	return strings.Contains(lower, "youtube.com/") ||
+		strings.Contains(lower, "youtu.be/")
 }
 
 // handleMedia handles playing media from a message.
