@@ -17,14 +17,28 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		ChannelCount: 2,
 	}
 
-	quotedPath := fmt.Sprintf("\"%s\"", filePath)
-	isURL := isURLRegex.MatchString(filePath)
-	isLiveHLS := strings.Contains(strings.ToLower(filePath), ".m3u8") ||
-		strings.Contains(strings.ToLower(filePath), "manifest.googlevideo.com")
+	audioPath := filePath
+	videoPath := filePath
+
+	const dualSeparator = "|||HAWSI_DUAL_STREAM|||"
+	if strings.Contains(filePath, dualSeparator) {
+		parts := strings.SplitN(filePath, dualSeparator, 2)
+		videoPath = strings.TrimSpace(parts[0])
+		audioPath = strings.TrimSpace(parts[1])
+	}
+
+	quotedAudioPath := fmt.Sprintf("\"%s\"", audioPath)
+	quotedVideoPath := fmt.Sprintf("\"%s\"", videoPath)
+
+	isURL := isURLRegex.MatchString(videoPath)
+	isAudioURL := isURLRegex.MatchString(audioPath)
+
+	isLiveHLS := strings.Contains(strings.ToLower(videoPath), ".m3u8") ||
+		strings.Contains(strings.ToLower(videoPath), "manifest.googlevideo.com")
 
 	var audioCmd strings.Builder
 	audioCmd.WriteString("ffmpeg ")
-	if isURL && !isLiveHLS {
+	if isAudioURL && !isLiveHLS {
 		audioCmd.WriteString("-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
 	}
 
@@ -41,7 +55,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		audioCmd.WriteString(seekFlags + " ")
 	}
 
-	audioCmd.WriteString("-i " + quotedPath + " ")
+	audioCmd.WriteString("-i " + quotedAudioPath + " ")
 	if filterFlags != "" {
 		audioCmd.WriteString(filterFlags + " ")
 	}
@@ -58,7 +72,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		}
 	}
 
-	originalWidth, originalHeight := getVideoDimensions(filePath)
+	originalWidth, originalHeight := getVideoDimensions(videoPath)
 
 	width := 1280
 	height := 720
@@ -102,7 +116,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		videoCmd.WriteString(seekFlags + " ")
 	}
 
-	videoCmd.WriteString(fmt.Sprintf("-i %s ", quotedPath))
+	videoCmd.WriteString(fmt.Sprintf("-i %s ", quotedVideoPath))
 	if filterFlags != "" {
 		videoCmd.WriteString(filterFlags + " ")
 	}

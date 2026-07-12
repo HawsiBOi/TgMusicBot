@@ -210,26 +210,28 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		"--no-warnings",
 		"--quiet",
 		"--no-playlist",
+		"--geo-bypass",
 		"--socket-timeout", "8",
 		"--retries", "1",
 		"--extractor-args", "youtube:player_js_version=actual",
 	}
 
 	if video {
-		// Progressive format is required here so one URL contains
-		// both video and audio for direct NTgCalls streaming.
-		args = append(args,
+		// Resolve separate high-quality video and audio URLs.
+		args = append(
+			args,
 			"-f",
-			"best[height>=720][height<=1080][vcodec^=avc1][acodec!=none]/best[height<=720][vcodec^=avc1][acodec!=none]/best[height<=720][vcodec!=none][acodec!=none]",
+			"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio",
+			"--get-url",
 		)
 	} else {
-		args = append(args,
+		args = append(
+			args,
 			"-f",
 			"bestaudio[ext=m4a]/bestaudio",
+			"--get-url",
 		)
 	}
-
-	args = append(args, "--get-url")
 
 	cookieFile := y.getCookieFile()
 	if cookieFile != "" {
@@ -261,20 +263,31 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		return "", fmt.Errorf("direct stream resolve failed: %w", err)
 	}
 
-	streamURL := strings.TrimSpace(string(output))
-	if streamURL == "" {
+	rawOutput := strings.TrimSpace(string(output))
+	if rawOutput == "" {
 		return "", errors.New("yt-dlp returned an empty direct stream URL")
 	}
 
-	// Direct playback requires exactly one media URL.
-	lines := strings.Split(streamURL, "\n")
-	streamURL = strings.TrimSpace(lines[0])
+	lines := strings.Split(rawOutput, "\n")
+	var urls []string
 
-	if streamURL == "" {
-		return "", errors.New("resolved direct stream URL is empty")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			urls = append(urls, line)
+		}
 	}
 
-	return streamURL, nil
+	if video {
+		if len(urls) < 2 {
+			return "", errors.New("yt-dlp did not return separate video and audio URLs")
+		}
+
+		// video URL ||| audio URL
+		return urls[0] + "|||HAWSI_DUAL_STREAM|||" + urls[1], nil
+	}
+
+	return urls[0], nil
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
