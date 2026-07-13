@@ -89,10 +89,6 @@ func (y *youTubeData) getInfo() (utils.PlatformTracks, error) {
 			"url", y.Query,
 		)
 
-		if strings.HasPrefix(playlistID, "RD") {
-			return getYouTubeMixPlaylist(playlistCtx, playlistID)
-		}
-
 		return getYouTubePlaylist(playlistCtx, playlistID)
 
 	case videoID != "":
