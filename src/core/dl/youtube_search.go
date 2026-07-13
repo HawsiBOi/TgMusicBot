@@ -277,16 +277,21 @@ func getYouTubePlaylist(ctx context.Context, playlistID string) (utils.PlatformT
 func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.PlatformTracks, error) {
 	playlistURL := "https://www.youtube.com/playlist?list=" + playlistID
 
+	slog.Info(
+		"[YouTube] Reading playlist with yt-dlp",
+		"playlist_id", playlistID,
+	)
+
 	args := []string{
 		"--flat-playlist",
 		"--dump-single-json",
 		"--no-warnings",
-		"--quiet",
 		"--ignore-errors",
 		"--no-check-formats",
-		"--sleep-requests", "1",
-		"--extractor-retries", "1",
-		"--socket-timeout", "10",
+		"--extractor-retries", "0",
+		"--retries", "0",
+		"--socket-timeout", "15",
+		"--js-runtimes", "deno:/usr/local/bin/deno",
 		playlistURL,
 	}
 
@@ -295,7 +300,8 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 	output, err := cmd.Output()
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return utils.PlatformTracks{}, errors.New("YouTube playlist extraction timed out")
+			return utils.PlatformTracks{},
+				errors.New("YouTube playlist reading timed out")
 		}
 
 		var exitErr *exec.ExitError
@@ -325,7 +331,7 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 
 	if err := json.Unmarshal(output, &data); err != nil {
 		return utils.PlatformTracks{}, fmt.Errorf(
-			"decode yt-dlp playlist: %w",
+			"decode YouTube playlist: %w",
 			err,
 		)
 	}
@@ -334,11 +340,7 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 	seen := make(map[string]bool)
 
 	for _, entry := range data.Entries {
-		if entry.ID == "" {
-			continue
-		}
-
-		if seen[entry.ID] {
+		if entry.ID == "" || seen[entry.ID] {
 			continue
 		}
 
@@ -371,7 +373,7 @@ func getYouTubePlaylistWithYtDlp(ctx context.Context, playlistID string) (utils.
 	}
 
 	slog.Info(
-		"[YouTube] Playlist extracted with yt-dlp",
+		"[YouTube] Playlist successfully read",
 		"playlist_id", playlistID,
 		"tracks", len(tracks),
 	)

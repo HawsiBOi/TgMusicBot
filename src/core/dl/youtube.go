@@ -71,21 +71,36 @@ func (y *youTubeData) getInfo() (utils.PlatformTracks, error) {
 		return utils.PlatformTracks{}, errors.New("the provided URL is invalid or the platform is not supported")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
-	defer cancel()
-
 	y.Query = normalizeYouTubeURL(y.Query)
 	videoID := extractVideoID(y.Query)
 	playlistID := extractPlaylistID(y.Query)
 
 	switch {
 	case playlistID != "":
+		playlistCtx, playlistCancel := context.WithTimeout(
+			context.Background(),
+			90*time.Second,
+		)
+		defer playlistCancel()
+
+		slog.Info(
+			"[YouTube] Playlist link detected",
+			"playlist_id", playlistID,
+			"url", y.Query,
+		)
+
 		if strings.HasPrefix(playlistID, "RD") {
-			return getYouTubeMixPlaylist(ctx, playlistID)
+			return getYouTubeMixPlaylist(playlistCtx, playlistID)
 		}
-		return getYouTubePlaylist(ctx, playlistID)
+
+		return getYouTubePlaylist(playlistCtx, playlistID)
 
 	case videoID != "":
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			15*time.Second,
+		)
+		defer cancel()
 		for _, query := range []string{videoID, y.Query} {
 			tracks, err := searchYouTube(query, 10)
 			if err != nil {
