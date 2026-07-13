@@ -121,7 +121,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		videoCmd.WriteString(filterFlags + " ")
 	}
 
-	videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v warning pipe:1",
+	videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v error pipe:1",
 		videoDescription.Fps,
 		videoDescription.Width,
 		videoDescription.Height,
