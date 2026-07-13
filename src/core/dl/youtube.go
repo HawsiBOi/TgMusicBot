@@ -89,7 +89,22 @@ func (y *youTubeData) getInfo() (utils.PlatformTracks, error) {
 			"url", y.Query,
 		)
 
-		return getYouTubePlaylist(playlistCtx, playlistID)
+		if strings.HasPrefix(playlistID, "RD") {
+			slog.Info(
+				"[YouTube] Mix playlist detected",
+				"playlist_id", playlistID,
+			)
+
+			return getYouTubeMixPlaylist(
+				playlistCtx,
+				playlistID,
+			)
+		}
+
+		return getYouTubePlaylist(
+			playlistCtx,
+			playlistID,
+		)
 
 	case videoID != "":
 		ctx, cancel := context.WithTimeout(
