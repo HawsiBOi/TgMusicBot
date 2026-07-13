@@ -34,7 +34,7 @@ func ResolveYouTubeLive(url string) (*YouTubeLiveInfo, error) {
 	resolve := func(cookieFile string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(
 			context.Background(),
-			2*time.Minute,
+			15*time.Second,
 		)
 		defer cancel()
 
@@ -52,8 +52,6 @@ func ResolveYouTubeLive(url string) (*YouTubeLiveInfo, error) {
 		}
 
 		args = append(args, url)
-
-		waitForYouTubeRequest()
 
 		cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 		output, err := cmd.CombinedOutput()

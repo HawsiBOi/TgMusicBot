@@ -198,7 +198,7 @@ func waitForYouTubeRequest() {
 	youtubeRequestMu.Lock()
 	defer youtubeRequestMu.Unlock()
 
-	const minimumDelay = 10 * time.Second
+	const minimumDelay = 5 * time.Second
 
 	if !lastYouTubeRequest.IsZero() {
 		elapsed := time.Since(lastYouTubeRequest)
@@ -297,7 +297,11 @@ func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, e
 		}
 	}
 
-	waitForYouTubeRequest()
+	slog.Info(
+		"[YouTube] Starting immediate download fallback",
+		"video_id", info.Id,
+		"video", video,
+	)
 
 	return y.downloadWithYtDlp(info.Id, video)
 }
@@ -347,7 +351,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 
 		ctx, cancel := context.WithTimeout(
 			context.Background(),
-			20*time.Second,
+			8*time.Second,
 		)
 		defer cancel()
 
@@ -435,7 +439,10 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		"video", video,
 	)
 
-	waitForYouTubeRequest()
+	slog.Info(
+		"[YouTube] Immediate cookie retry",
+		"video_id", videoID,
+	)
 
 	streamURL, cookieErr := resolve(cookieFile)
 	if cookieErr == nil {
