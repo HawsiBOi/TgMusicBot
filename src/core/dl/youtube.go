@@ -251,7 +251,6 @@ func isYouTubeBotCheck(err error) bool {
 
 // downloadTrack handles the download of a track from YouTube.
 func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, error) {
-	waitForYouTubeRequest()
 
 	resolveStart := time.Now()
 
