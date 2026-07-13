@@ -198,18 +198,21 @@ func waitForYouTubeRequest() {
 	youtubeRequestMu.Lock()
 	defer youtubeRequestMu.Unlock()
 
-	const minimumDelay = 7 * time.Second
+	const minimumDelay = 10 * time.Second
 
-	elapsed := time.Since(lastYouTubeRequest)
-	if !lastYouTubeRequest.IsZero() && elapsed < minimumDelay {
-		delay := minimumDelay - elapsed
+	if !lastYouTubeRequest.IsZero() {
+		elapsed := time.Since(lastYouTubeRequest)
 
-		slog.Info(
-			"[YouTube] Waiting before next request",
-			"delay", delay,
-		)
+		if elapsed < minimumDelay {
+			delay := minimumDelay - elapsed
 
-		time.Sleep(delay)
+			slog.Info(
+				"[YouTube] Global request gate waiting",
+				"delay", delay,
+			)
+
+			time.Sleep(delay)
+		}
 	}
 
 	lastYouTubeRequest = time.Now()

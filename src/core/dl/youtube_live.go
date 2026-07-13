@@ -50,6 +50,8 @@ func ResolveYouTubeLive(url string) (*YouTubeLiveInfo, error) {
 
 	args = append(args, url)
 
+	waitForYouTubeRequest()
+
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 	output, err := cmd.CombinedOutput()
 
