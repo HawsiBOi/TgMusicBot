@@ -308,9 +308,8 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 	}
 
 	videoURL := "https://www.youtube.com/watch?v=" + videoID
-	cookieFile := y.getCookieFile()
 
-	resolve := func(cookie string) (string, error) {
+	resolve := func(cookieFile string) (string, error) {
 		args := []string{
 			"--no-warnings",
 			"--no-playlist",
@@ -338,15 +337,18 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 			)
 		}
 
-		if cookie != "" {
-			args = append(args, "--cookies", cookie)
+		if cookieFile != "" {
+			args = append(args, "--cookies", cookieFile)
 		} else if config.Proxy != "" {
 			args = append(args, "--proxy", config.Proxy)
 		}
 
 		args = append(args, videoURL)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			20*time.Second,
+		)
 		defer cancel()
 
 		cmd := exec.CommandContext(ctx, "yt-dlp", args...)
@@ -407,32 +409,61 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		return urls[0], nil
 	}
 
-	streamURL, err := resolve(cookieFile)
-	if err == nil {
+	slog.Info(
+		"[YouTube] Trying guest direct resolve",
+		"video_id", videoID,
+		"video", video,
+	)
+
+	streamURL, guestErr := resolve("")
+	if guestErr == nil {
 		return streamURL, nil
 	}
 
-	if cookieFile != "" && isYouTubeBotCheck(err) {
-		slog.Warn(
-			"[YouTube] Cookie rejected by bot check; retrying direct resolve without cookie",
-			"cookie", cookieFile,
-			"video_id", videoID,
-		)
-
-		_ = os.Remove(cookieFile)
-
-		waitForYouTubeRequest()
-
-		return resolve("")
+	if isYouTubeRateLimited(guestErr) {
+		return "", guestErr
 	}
 
-	return "", err
+	cookieFile := y.getCookieFile()
+	if cookieFile == "" {
+		return "", guestErr
+	}
+
+	slog.Info(
+		"[YouTube] Guest resolve failed; trying one cookie",
+		"video_id", videoID,
+		"video", video,
+	)
+
+	waitForYouTubeRequest()
+
+	streamURL, cookieErr := resolve(cookieFile)
+	if cookieErr == nil {
+		return streamURL, nil
+	}
+
+	if isYouTubeBotCheck(cookieErr) {
+		slog.Warn(
+			"[YouTube] Cookie rejected by YouTube",
+			"video_id", videoID,
+			"cookie", cookieFile,
+		)
+
+		return "", fmt.Errorf(
+			"YouTube cookie rejected: %w",
+			cookieErr,
+		)
+	}
+
+	return "", cookieErr
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
 func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, string) {
-	outputTemplate := filepath.Join(config.DownloadsDir, "%(id)s.%(ext)s")
-	var cookieFile string
+	outputTemplate := filepath.Join(
+		config.DownloadsDir,
+		"%(id)s.%(ext)s",
+	)
 
 	params := []string{
 		"yt-dlp",
@@ -440,6 +471,7 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		"--quiet",
 		"--geo-bypass",
 		"--retries", "0",
+		"--extractor-retries", "0",
 		"--continue",
 		"--no-part",
 		"--concurrent-fragments", "1",
@@ -451,28 +483,41 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		"--no-embed-metadata",
 		"--no-embed-chapters",
 		"--no-embed-subs",
+		"--js-runtimes", "deno:/usr/local/bin/deno",
 		"--extractor-args", "youtube:player_js_version=actual",
 		"-o", outputTemplate,
 	}
 
 	if video {
-		formatSelector := "bestvideo[height<=720]+bestaudio/best[height<=720]"
-		params = append(params, "-f", formatSelector, "--merge-output-format", "mp4")
+		params = append(
+			params,
+			"-f",
+			"bestvideo[height<=720]+bestaudio/best[height<=720]",
+			"--merge-output-format",
+			"mp4",
+		)
 	} else {
-		params = append(params, "-f", "bestaudio[ext=m4a]/bestaudio")
+		params = append(
+			params,
+			"-f",
+			"bestaudio[ext=m4a]/bestaudio",
+		)
 	}
 
-	cookieFile = y.getCookieFile()
-	if cookieFile != "" {
-		params = append(params, "--cookies", cookieFile)
-	} else if config.Proxy != "" {
+	if config.Proxy != "" {
 		params = append(params, "--proxy", config.Proxy)
 	}
 
 	videoURL := "https://www.youtube.com/watch?v=" + videoID
-	params = append(params, videoURL, "--print", "after_move:filepath")
 
-	return params, cookieFile
+	params = append(
+		params,
+		videoURL,
+		"--print",
+		"after_move:filepath",
+	)
+
+	return params, ""
 }
 
 // downloadWithYtDlp downloads media from YouTube using the yt-dlp command-line tool.

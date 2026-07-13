@@ -31,40 +31,66 @@ func ResolveYouTubeLive(url string) (*YouTubeLiveInfo, error) {
 		return nil, errors.New("empty YouTube URL")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+	resolve := func(cookieFile string) ([]byte, error) {
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			2*time.Minute,
+		)
+		defer cancel()
 
-	args := []string{
-		"--no-warnings",
-		"--no-playlist",
-		"--geo-bypass",
-		"-J",
+		args := []string{
+			"--no-warnings",
+			"--no-playlist",
+			"--geo-bypass",
+			"--js-runtimes", "deno:/usr/local/bin/deno",
+			"--extractor-args", "youtube:player_js_version=actual",
+			"-J",
+		}
+
+		if cookieFile != "" {
+			args = append(args, "--cookies", cookieFile)
+		}
+
+		args = append(args, url)
+
+		waitForYouTubeRequest()
+
+		cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+		output, err := cmd.CombinedOutput()
+
+		if err != nil {
+			return nil, fmt.Errorf(
+				"yt-dlp live extraction failed: %s",
+				strings.TrimSpace(string(output)),
+			)
+		}
+
+		return output, nil
 	}
 
-	yt := newYouTubeData(url)
-	cookieFile := yt.getCookieFile()
-
-	if cookieFile != "" {
-		args = append(args, "--cookies", cookieFile)
-	}
-
-	args = append(args, url)
-
-	waitForYouTubeRequest()
-
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := resolve("")
 
 	if err != nil {
-		return nil, fmt.Errorf(
-			"yt-dlp live extraction failed: %s",
-			strings.TrimSpace(string(output)),
-		)
+		yt := newYouTubeData(url)
+		cookieFile := yt.getCookieFile()
+
+		if cookieFile == "" || isYouTubeRateLimited(err) {
+			return nil, err
+		}
+
+		output, err = resolve(cookieFile)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var info youtubeLiveJSON
+
 	if err := json.Unmarshal(output, &info); err != nil {
-		return nil, fmt.Errorf("failed to parse live info: %w", err)
+		return nil, fmt.Errorf(
+			"failed to parse live info: %w",
+			err,
+		)
 	}
 
 	isLive := info.IsLive || info.LiveStatus == "is_live"
@@ -88,7 +114,9 @@ func ResolveYouTubeLive(url string) (*YouTubeLiveInfo, error) {
 	}
 
 	if streamURL == "" {
-		return nil, errors.New("no playable live stream URL found")
+		return nil, errors.New(
+			"no playable live stream URL found",
+		)
 	}
 
 	return &YouTubeLiveInfo{
