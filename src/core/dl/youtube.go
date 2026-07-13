@@ -229,6 +229,20 @@ func isYouTubeRateLimited(err error) bool {
 		strings.Contains(text, "this content isn't available, try again later")
 }
 
+func isYouTubeBotCheck(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	text := strings.ToLower(err.Error())
+	text = strings.ReplaceAll(text, "’", "'")
+
+	return strings.Contains(text, "sign in to confirm you're not a bot") ||
+		strings.Contains(text, "confirm you're not a bot") ||
+		strings.Contains(text, "use --cookies-from-browser") ||
+		strings.Contains(text, "use --cookies for the authentication")
+}
+
 // downloadTrack handles the download of a track from YouTube.
 func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, error) {
 	waitForYouTubeRequest()
@@ -293,107 +307,123 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 	videoURL := "https://www.youtube.com/watch?v=" + videoID
 	cookieFile := y.getCookieFile()
 
-	args := []string{
-		"--no-warnings",
-		"--no-playlist",
-		"--geo-bypass",
-		"--socket-timeout", "10",
-		"--retries", "0",
-		"--extractor-retries", "0",
-		"--js-runtimes", "deno:/usr/local/bin/deno",
-		"--extractor-args", "youtube:player_js_version=actual",
-	}
-
-	if video {
-		args = append(
-			args,
-			"-f",
-			"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=720]",
-			"--get-url",
-		)
-	} else {
-		args = append(
-			args,
-			"-f",
-			"bestaudio[ext=m4a]/bestaudio",
-			"--get-url",
-		)
-	}
-
-	if cookieFile != "" {
-		args = append(args, "--cookies", cookieFile)
-	} else if config.Proxy != "" {
-		args = append(args, "--proxy", config.Proxy)
-	}
-
-	args = append(args, videoURL)
-
-	ctx, cancel := context.WithTimeout(
-		context.Background(),
-		20*time.Second,
-	)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
-
-	output, err := cmd.Output()
-	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", errors.New("direct stream resolve timed out")
+	resolve := func(cookie string) (string, error) {
+		args := []string{
+			"--no-warnings",
+			"--no-playlist",
+			"--geo-bypass",
+			"--socket-timeout", "10",
+			"--retries", "0",
+			"--extractor-retries", "0",
+			"--js-runtimes", "deno:/usr/local/bin/deno",
+			"--extractor-args", "youtube:player_js_version=actual",
 		}
 
-		var exitErr *exec.ExitError
-
-		if errors.As(err, &exitErr) {
-			stderr := strings.TrimSpace(string(exitErr.Stderr))
-
-			return "", fmt.Errorf(
-				"yt-dlp direct resolve failed: %s",
-				stderr,
+		if video {
+			args = append(
+				args,
+				"-f",
+				"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=720]",
+				"--get-url",
+			)
+		} else {
+			args = append(
+				args,
+				"-f",
+				"bestaudio[ext=m4a]/bestaudio",
+				"--get-url",
 			)
 		}
 
-		return "", fmt.Errorf(
-			"yt-dlp direct resolve failed: %w",
-			err,
-		)
-	}
-
-	rawOutput := strings.TrimSpace(string(output))
-
-	if rawOutput == "" {
-		return "", errors.New("yt-dlp returned empty URL")
-	}
-
-	var urls []string
-
-	for _, line := range strings.Split(rawOutput, "\n") {
-		line = strings.TrimSpace(line)
-
-		if strings.HasPrefix(line, "http://") ||
-			strings.HasPrefix(line, "https://") {
-			urls = append(urls, line)
+		if cookie != "" {
+			args = append(args, "--cookies", cookie)
+		} else if config.Proxy != "" {
+			args = append(args, "--proxy", config.Proxy)
 		}
-	}
 
-	if video {
-		if len(urls) < 2 {
+		args = append(args, videoURL)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+		output, err := cmd.Output()
+
+		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return "", errors.New("direct stream resolve timed out")
+			}
+
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				return "", fmt.Errorf(
+					"yt-dlp direct resolve failed: %s",
+					strings.TrimSpace(string(exitErr.Stderr)),
+				)
+			}
+
 			return "", fmt.Errorf(
-				"separate video/audio URLs not returned; got %d URL(s)",
-				len(urls),
+				"yt-dlp direct resolve failed: %w",
+				err,
 			)
 		}
 
-		return urls[0] +
-			"|||HAWSI_DUAL_STREAM|||" +
-			urls[1], nil
+		rawOutput := strings.TrimSpace(string(output))
+		if rawOutput == "" {
+			return "", errors.New("yt-dlp returned empty URL")
+		}
+
+		var urls []string
+
+		for _, line := range strings.Split(rawOutput, "\n") {
+			line = strings.TrimSpace(line)
+
+			if strings.HasPrefix(line, "http://") ||
+				strings.HasPrefix(line, "https://") {
+				urls = append(urls, line)
+			}
+		}
+
+		if video {
+			if len(urls) < 2 {
+				return "", fmt.Errorf(
+					"separate video/audio URLs not returned; got %d URL(s)",
+					len(urls),
+				)
+			}
+
+			return urls[0] +
+				"|||HAWSI_DUAL_STREAM|||" +
+				urls[1], nil
+		}
+
+		if len(urls) == 0 {
+			return "", errors.New("audio stream URL not returned")
+		}
+
+		return urls[0], nil
 	}
 
-	if len(urls) == 0 {
-		return "", errors.New("audio stream URL not returned")
+	streamURL, err := resolve(cookieFile)
+	if err == nil {
+		return streamURL, nil
 	}
 
-	return urls[0], nil
+	if cookieFile != "" && isYouTubeBotCheck(err) {
+		slog.Warn(
+			"[YouTube] Cookie rejected by bot check; retrying direct resolve without cookie",
+			"cookie", cookieFile,
+			"video_id", videoID,
+		)
+
+		_ = os.Remove(cookieFile)
+
+		waitForYouTubeRequest()
+
+		return resolve("")
+	}
+
+	return "", err
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
@@ -448,38 +478,75 @@ func (y *youTubeData) downloadWithYtDlp(videoID string, video bool) (string, err
 		return "", errors.New("videoID is empty")
 	}
 
-	ytdlpParams, cookieFile := y.buildYtdlpParams(videoID, video)
+	run := func() (string, string, error) {
+		ytdlpParams, cookieFile := y.buildYtdlpParams(videoID, video)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
 
-	cmd := exec.CommandContext(ctx, ytdlpParams[0], ytdlpParams[1:]...)
+		cmd := exec.CommandContext(ctx, ytdlpParams[0], ytdlpParams[1:]...)
+		output, err := cmd.Output()
 
-	output, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			stderr := string(exitErr.Stderr)
-			if cookieFile != "" && strings.Contains(stderr, "Sign in to confirm you're not a bot") {
-				_ = os.Remove(cookieFile)
+		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return "", cookieFile, fmt.Errorf(
+					"yt-dlp timed out for video ID: %s",
+					videoID,
+				)
 			}
-			return "", fmt.Errorf("yt-dlp failed with exit code %d: %s", exitErr.ExitCode(), stderr)
+
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) {
+				return "", cookieFile, fmt.Errorf(
+					"yt-dlp failed with exit code %d: %s",
+					exitErr.ExitCode(),
+					string(exitErr.Stderr),
+				)
+			}
+
+			return "", cookieFile, fmt.Errorf(
+				"an unexpected error occurred while downloading %s: %w",
+				videoID,
+				err,
+			)
 		}
 
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", fmt.Errorf("yt-dlp timed out for video ID: %s", videoID)
-		}
-
-		return "", fmt.Errorf("an unexpected error occurred while downloading %s: %w", videoID, err)
+		return strings.TrimSpace(string(output)), cookieFile, nil
 	}
 
-	downloadedPathStr := strings.TrimSpace(string(output))
+	downloadedPathStr, cookieFile, err := run()
+
+	if err != nil && cookieFile != "" && isYouTubeBotCheck(err) {
+		slog.Warn(
+			"[YouTube] Download cookie rejected by bot check",
+			"cookie", cookieFile,
+			"video_id", videoID,
+		)
+
+		_ = os.Remove(cookieFile)
+
+		return "", fmt.Errorf(
+			"YouTube rejected the current authentication cookie: %w",
+			err,
+		)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
 	if downloadedPathStr == "" {
-		return "", fmt.Errorf("no output path was returned for %s", videoID)
+		return "", fmt.Errorf(
+			"no output path was returned for %s",
+			videoID,
+		)
 	}
 
 	if _, err := os.Stat(downloadedPathStr); os.IsNotExist(err) {
-		return "", fmt.Errorf("the file was not found at the reported path: %s", downloadedPathStr)
+		return "", fmt.Errorf(
+			"the file was not found at the reported path: %s",
+			downloadedPathStr,
+		)
 	}
 
 	return downloadedPathStr, nil
