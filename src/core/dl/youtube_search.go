@@ -71,8 +71,6 @@ func ytPost(ctx context.Context, path string, extraFields map[string]any) (map[s
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	waitForYouTubeRequest()
-
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -117,8 +115,6 @@ func searchYouTube(query string, limit int) ([]utils.MusicTrack, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	req.Header.Set("Accept", "application/json")
-
-	waitForYouTubeRequest()
 
 	resp, err := client.Do(req)
 	if err != nil {
