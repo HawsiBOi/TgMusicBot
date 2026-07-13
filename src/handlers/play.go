@@ -73,16 +73,18 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 	input := coalesce(url, args)
 
 	// YouTube Live direct streaming.
-	if isVideo && isYouTubeURL(input) {
+	// Playlist URLs must continue to the normal YouTube playlist flow.
+	if isVideo && isYouTubeURL(input) && !isYouTubePlaylistURL(input) {
 		liveInfo, liveErr := dl.ResolveYouTubeLive(input)
 
 		if liveErr != nil {
-			_, _ = m.ReplyText(c, fmt.Sprintf("❌ Hawsi Live Resolver Error: %s", liveErr.Error()), nil)
-			return td.EndGroups
-		}
-
-		if liveInfo != nil && liveInfo.IsLive {
-			updater, err := m.ReplyText(c, "📡 Hawsi Live Ko Pakad Raha Hu... Ruko Jara...", nil)
+			c.Logger.Warn(
+				"YouTube live resolver failed; continuing normal video flow",
+				"error", liveErr,
+				"url", input,
+			)
+		} else if liveInfo != nil && liveInfo.IsLive {
+			updater, err := m.ReplyText(c, "📡 Hawsi Live Ko Pakad Raha Hu. Ruko Jara.", nil)
 			if err != nil {
 				return td.EndGroups
 			}
@@ -97,7 +99,7 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 			user := html.EscapeString(firstName(c, m))
 
 			liveText := fmt.Sprintf(
-				"<u><b>🔴 Hawsi Live Shuru...</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Status:</b> LIVE 🔴\n<b>Requested by:</b> %s",
+				"<u><b>🔴 Hawsi Live Shuru.</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Status:</b> LIVE 🔴\n<b>Requested by:</b> %s",
 				sourceURL, title, user,
 			)
 
@@ -189,6 +191,13 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 	}
 
 	return handleTextSearch(c, m, updater, wrapper, chatID, isVideo)
+}
+
+func isYouTubePlaylistURL(input string) bool {
+	lower := strings.ToLower(input)
+
+	return strings.Contains(lower, "list=") ||
+		strings.Contains(lower, "/playlist")
 }
 
 func isYouTubeURL(input string) bool {
