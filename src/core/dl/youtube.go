@@ -14,9 +14,11 @@ import (
 	"ashokshau/tgmusic/config"
 	"ashokshau/tgmusic/src/utils"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -190,70 +192,7 @@ func (y *youTubeData) getTrack() (utils.TrackInfo, error) {
 var (
 	youtubeRequestMu   sync.Mutex
 	lastYouTubeRequest time.Time
-
-	youtubeCookieMu         sync.Mutex
-	youtubeCookieIndex      int
-	youtubeCookieQuarantine = make(map[string]time.Time)
 )
-
-const youtubeCookieCooldown = 30 * time.Minute
-
-func quarantineYouTubeCookie(cookieFile string) {
-	if cookieFile == "" {
-		return
-	}
-
-	youtubeCookieMu.Lock()
-	defer youtubeCookieMu.Unlock()
-
-	youtubeCookieQuarantine[cookieFile] = time.Now().Add(youtubeCookieCooldown)
-
-	slog.Warn(
-		"[YouTube] Cookie quarantined",
-		"cookie", cookieFile,
-		"cooldown", youtubeCookieCooldown,
-	)
-}
-
-func getHealthyYouTubeCookie() string {
-	youtubeCookieMu.Lock()
-	defer youtubeCookieMu.Unlock()
-
-	cookies := config.CookiesPath
-	if len(cookies) == 0 {
-		return ""
-	}
-
-	now := time.Now()
-
-	for cookie, until := range youtubeCookieQuarantine {
-		if now.After(until) {
-			delete(youtubeCookieQuarantine, cookie)
-
-			slog.Info(
-				"[YouTube] Cookie quarantine expired",
-				"cookie", cookie,
-			)
-		}
-	}
-
-	for checked := 0; checked < len(cookies); checked++ {
-		index := youtubeCookieIndex % len(cookies)
-		youtubeCookieIndex = (youtubeCookieIndex + 1) % len(cookies)
-
-		cookie := cookies[index]
-
-		if until, quarantined := youtubeCookieQuarantine[cookie]; quarantined &&
-			now.Before(until) {
-			continue
-		}
-
-		return cookie
-	}
-
-	slog.Warn("[YouTube] All configured cookies are quarantined")
-	return ""
-}
 
 func waitForYouTubeRequest() {
 	youtubeRequestMu.Lock()
@@ -480,7 +419,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 			"video_id", videoID,
 		)
 
-		quarantineYouTubeCookie(cookieFile)
+		_ = os.Remove(cookieFile)
 
 		waitForYouTubeRequest()
 
@@ -587,7 +526,7 @@ func (y *youTubeData) downloadWithYtDlp(videoID string, video bool) (string, err
 			"video_id", videoID,
 		)
 
-		quarantineYouTubeCookie(cookieFile)
+		_ = os.Remove(cookieFile)
 
 		return "", fmt.Errorf(
 			"YouTube rejected the current authentication cookie: %w",
@@ -618,7 +557,17 @@ func (y *youTubeData) downloadWithYtDlp(videoID string, video bool) (string, err
 
 // getCookieFile retrieves the path to a cookie file from the configured list.
 func (y *youTubeData) getCookieFile() string {
-	return getHealthyYouTubeCookie()
+	cookiesPath := config.CookiesPath
+	if len(cookiesPath) == 0 {
+		return ""
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(cookiesPath))))
+	if err != nil {
+		slog.Info("Could not generate a random number", "error", err)
+		return cookiesPath[0]
+	}
+
+	return cookiesPath[n.Int64()]
 }
 
 // downloadWithApi downloads a track using the external API.
