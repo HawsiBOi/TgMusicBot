@@ -72,10 +72,15 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		}
 	}
 
-	originalWidth, originalHeight := getVideoDimensions(videoPath)
-
 	width := 1280
 	height := 720
+
+	originalWidth := 0
+	originalHeight := 0
+
+	if !isLiveHLS {
+		originalWidth, originalHeight = getVideoDimensions(videoPath)
+	}
 
 	if originalWidth > 0 && originalHeight > 0 {
 		ratio := float64(originalWidth) / float64(originalHeight)
