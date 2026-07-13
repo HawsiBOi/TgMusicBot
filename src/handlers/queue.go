@@ -50,7 +50,8 @@ func queueHandler(c *td.Client, m *td.Message) error {
 	playedTime, _ := vc.Calls.PlayedTime(chatID)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("<b>Hawsi Ki Playlist for %s</b>\n\n", chat.Title))
+	b.WriteString("◈ <b>HAWSI BAJANE WALA</b>\n\n")
+	b.WriteString(fmt.Sprintf("<blockquote><b>Hawsi Ki Playlist for %s</b></blockquote>\n", chat.Title))
 
 	b.WriteString("<b>Abhi Yeh Chal Raha Hai...:</b>\n")
 	b.WriteString(fmt.Sprintf("• <b>Title:</b> <code>%s</code>\n", truncate(current.Name, 45)))
@@ -91,6 +92,7 @@ func queueHandler(c *td.Client, m *td.Message) error {
 	}
 
 	b.WriteString(fmt.Sprintf("\n<b>Total:</b> %d tracks", len(queue)))
+	b.WriteString("\n\n<code>QUEUE  ·  HAWSI</code>")
 
 	text := b.String()
 	if len(text) > 4096 {

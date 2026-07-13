@@ -97,7 +97,7 @@ func handlePlay(c *td.Client, m *td.Message, isVideo bool) error {
 			user := html.EscapeString(firstName(c, m))
 
 			liveText := fmt.Sprintf(
-				"<u><b>🔴 Hawsi Live Shuru...</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Status:</b> LIVE 🔴\n<b>Requested by:</b> %s",
+				"◈ <b>HAWSI BAJANE WALA</b>\n<blockquote><u><b>🔴 Hawsi Live Shuru...</b></u></blockquote>\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Status:</b> LIVE 🔴\n<b>Requested by:</b> %s\n\n<code>LIVE  ·  HAWSI</code>",
 				sourceURL, title, user,
 			)
 
@@ -237,7 +237,7 @@ func handleMedia(c *td.Client, m *td.Message, updater *td.Message, dlMsg *td.Mes
 		escName := html.EscapeString(saveCache.Name)
 		escUser := html.EscapeString(saveCache.User)
 		queueInfo := fmt.Sprintf(
-			"<u><b>Itne Aur Hai Abhi...: %d</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+			"◈ <b>HAWSI BAJANE WALA</b>\n<blockquote><u><b>Itne Aur Hai Abhi...: %d</b></u></blockquote>\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s\n\n<code>QUEUE  ·  HAWSI</code>",
 			qLen, escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
 		)
 		_, err := updater.EditText(c, queueInfo, &td.EditTextMessageOpts{ReplyMarkup: core.ControlButtons("play"), ParseMode: "HTML", DisableWebPagePreview: true})
@@ -270,7 +270,7 @@ func handleMedia(c *td.Client, m *td.Message, updater *td.Message, dlMsg *td.Mes
 	escUser := html.EscapeString(saveCache.User)
 
 	nowPlaying := fmt.Sprintf(
-		"<u><b>| Chalo Kar Dia Na Shuru...</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+		"◈ <b>HAWSI BAJANE WALA</b>\n<blockquote><u><b>| Chalo Kar Dia Na Shuru...</b></u></blockquote>\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s\n\n<code>NOW PLAYING  ·  HAWSI</code>",
 		escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
 	)
 
@@ -338,7 +338,7 @@ func handleSingleTrack(c *td.Client, m *td.Message, updater *td.Message, song ut
 		escName := html.EscapeString(saveCache.Name)
 		escUser := html.EscapeString(saveCache.User)
 		queueInfo := fmt.Sprintf(
-			"<u><b>Itne Aur Hai Abhi...: %d</b></u>\n\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s",
+			"◈ <b>HAWSI BAJANE WALA</b>\n<blockquote><u><b>Itne Aur Hai Abhi...: %d</b></u></blockquote>\n<b>Title:</b> <a href='%s'>%s</a>\n\n<b>Duration:</b> %s min\n<b>Requested by:</b> %s\n\n<code>QUEUE  ·  HAWSI</code>",
 			qLen, escURL, escName, utils.SecToMin(saveCache.Duration), escUser,
 		)
 
@@ -368,7 +368,7 @@ func handleSingleTrack(c *td.Client, m *td.Message, updater *td.Message, song ut
 	escUsernp := html.EscapeString(saveCache.User)
 
 	nowPlaying := fmt.Sprintf(
-		"🟣 <b>HAWSI</b>\n<blockquote><b>Started streaming</b></blockquote>\n🎵 <a href='%s'><b>%s</b></a>\n\n🟦 <b>Duration</b>  ·  %s min\n🩵 <b>Requested by</b>  ·  %s\n\n🟢 <b>Direct Stream</b>  ·  Active",
+		"◈ <b>HAWSI BAJANE WALA</b>\n\n🟣 <b>HAWSI</b>\n<blockquote><b>Started streaming</b></blockquote>\n🎵 <a href='%s'><b>%s</b></a>\n\n🟦 <b>Duration</b>  ·  %s min\n🩵 <b>Requested by</b>  ·  %s\n\n🟢 <b>Direct Stream</b>  ·  Active\n\n<code>NOW PLAYING  ·  HAWSI</code>",
 		escURLnp, escNamenp, utils.SecToMin(song.Duration), escUsernp,
 	)
 
