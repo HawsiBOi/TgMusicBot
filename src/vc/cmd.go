@@ -39,7 +39,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 	var audioCmd strings.Builder
 	audioCmd.WriteString("ffmpeg ")
 	if isAudioURL && !isLiveHLS {
-		audioCmd.WriteString("-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
+		audioCmd.WriteString("-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
 	}
 
 	var seekFlags, filterFlags string
@@ -109,7 +109,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 	videoCmd.WriteString("ffmpeg ")
 
 	if isURL && !isLiveHLS {
-		videoCmd.WriteString("-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
+		videoCmd.WriteString("-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
 	}
 
 	if seekFlags != "" {
