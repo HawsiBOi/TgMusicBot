@@ -28,7 +28,7 @@ fi
 if [[ "$MODE" == "audio" ]]; then
   yt-dlp \
     "${YTDLP_ARGS[@]}" \
-    -f "140/bestaudio[ext=m4a]/bestaudio" \
+    -f "140/bestaudio[ext=m4a]/bestaudio/best" \
     -o - \
     "$URL" |
   ffmpeg \
@@ -46,7 +46,7 @@ if [[ "$MODE" == "audio" ]]; then
 elif [[ "$MODE" == "video" ]]; then
   yt-dlp \
     "${YTDLP_ARGS[@]}" \
-    -f "136/bestvideo[height<=720][ext=mp4]/bestvideo[height<=720]" \
+    -f "136/18/bestvideo[height<=720][ext=mp4]/bestvideo[height<=720]/best[height<=720]/best" \
     -o - \
     "$URL" |
   ffmpeg \
