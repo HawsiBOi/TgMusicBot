@@ -46,6 +46,7 @@ if [[ "$MODE" == "audio" ]]; then
     -i pipe:0 \
     -map 0:a:0? \
     -vn \
+    -af "aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS" \
     -ac 2 \
     -ar 48000 \
     -f s16le \
@@ -63,7 +64,7 @@ elif [[ "$MODE" == "video" ]]; then
     -i pipe:0 \
     -map 0:v:0? \
     -an \
-    -vf "fps=30,scale=1280:720:flags=fast_bilinear" \
+    -vf "setpts=PTS-STARTPTS,fps=30,scale=1280:720:flags=fast_bilinear" \
     -pix_fmt yuv420p \
     -f rawvideo \
     pipe:1 2>/dev/null
