@@ -15,7 +15,6 @@ func appendGoogleVideoHeaders(cmd *strings.Builder, mediaPath string) {
 	}
 
 	cmd.WriteString(`-user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" `)
-	cmd.WriteString(`-headers "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Language: en-us,en;q=0.5\r\nSec-Fetch-Mode: navigate\r\n" `)
 }
 
 // getMediaDescription creates a media description for ntgcalls based on the provided file path, video status, and ffmpeg parameters.
