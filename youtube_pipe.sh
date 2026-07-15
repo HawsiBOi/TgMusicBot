@@ -36,7 +36,6 @@ if [[ "$MODE" == "audio" ]]; then
     -loglevel warning \
     -probesize 512K \
     -analyzeduration 1000000 \
-    -re \
     -i pipe:0 \
     -vn \
     -f s16le \
@@ -55,7 +54,6 @@ elif [[ "$MODE" == "video" ]]; then
     -loglevel error \
     -probesize 512K \
     -analyzeduration 1000000 \
-    -re \
     -i pipe:0 \
     -an \
     -f rawvideo \
