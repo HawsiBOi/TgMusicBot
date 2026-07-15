@@ -474,6 +474,8 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		"%(id)s.%(ext)s",
 	)
 
+	var cookieFile string
+
 	params := []string{
 		"yt-dlp",
 		"--no-warnings",
@@ -513,7 +515,10 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		)
 	}
 
-	if config.Proxy != "" {
+	cookieFile = y.getCookieFile()
+	if cookieFile != "" {
+		params = append(params, "--cookies", cookieFile)
+	} else if config.Proxy != "" {
 		params = append(params, "--proxy", config.Proxy)
 	}
 
@@ -526,7 +531,7 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		"after_move:filepath",
 	)
 
-	return params, ""
+	return params, cookieFile
 }
 
 // downloadWithYtDlp downloads media from YouTube using the yt-dlp command-line tool.
