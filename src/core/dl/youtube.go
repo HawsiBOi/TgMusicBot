@@ -540,78 +540,100 @@ func (y *youTubeData) downloadWithYtDlp(videoID string, video bool) (string, err
 		return "", errors.New("videoID is empty")
 	}
 
-	run := func() (string, string, error) {
+	maxAttempts := len(config.CookiesPath) + 1
+	if maxAttempts < 2 {
+		maxAttempts = 2
+	}
+
+	var lastErr error
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		ytdlpParams, cookieFile := y.buildYtdlpParams(videoID, video)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			2*time.Minute,
+		)
 
-		cmd := exec.CommandContext(ctx, ytdlpParams[0], ytdlpParams[1:]...)
+		cmd := exec.CommandContext(
+			ctx,
+			ytdlpParams[0],
+			ytdlpParams[1:]...,
+		)
+
 		output, err := cmd.Output()
+		ctxErr := ctx.Err()
+		cancel()
 
-		if err != nil {
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return "", cookieFile, fmt.Errorf(
-					"yt-dlp timed out for video ID: %s",
+		if err == nil {
+			downloadedPathStr := strings.TrimSpace(string(output))
+
+			if downloadedPathStr == "" {
+				lastErr = fmt.Errorf(
+					"no output path was returned for %s",
 					videoID,
 				)
+				continue
 			}
 
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				return "", cookieFile, fmt.Errorf(
-					"yt-dlp failed with exit code %d: %s",
-					exitErr.ExitCode(),
-					string(exitErr.Stderr),
+			if _, statErr := os.Stat(downloadedPathStr); statErr != nil {
+				lastErr = fmt.Errorf(
+					"the file was not found at the reported path: %s",
+					downloadedPathStr,
 				)
+				continue
 			}
 
-			return "", cookieFile, fmt.Errorf(
+			return downloadedPathStr, nil
+		}
+
+		if errors.Is(ctxErr, context.DeadlineExceeded) {
+			lastErr = fmt.Errorf(
+				"yt-dlp timed out for video ID: %s",
+				videoID,
+			)
+			continue
+		}
+
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			lastErr = fmt.Errorf(
+				"yt-dlp failed with exit code %d: %s",
+				exitErr.ExitCode(),
+				string(exitErr.Stderr),
+			)
+		} else {
+			lastErr = fmt.Errorf(
 				"an unexpected error occurred while downloading %s: %w",
 				videoID,
 				err,
 			)
 		}
 
-		return strings.TrimSpace(string(output)), cookieFile, nil
+		if cookieFile != "" && isYouTubeBotCheck(lastErr) {
+			slog.Warn(
+				"[YouTube] Cookie rejected; trying another cookie",
+				"cookie", cookieFile,
+				"video_id", videoID,
+				"attempt", attempt,
+			)
+
+			_ = os.Remove(cookieFile)
+			continue
+		}
+
+		if isYouTubeRateLimited(lastErr) {
+			return "", lastErr
+		}
+
+		break
 	}
 
-	downloadedPathStr, cookieFile, err := run()
-
-	if err != nil && cookieFile != "" && isYouTubeBotCheck(err) {
-		slog.Warn(
-			"[YouTube] Download cookie rejected by bot check",
-			"cookie", cookieFile,
-			"video_id", videoID,
-		)
-
-		_ = os.Remove(cookieFile)
-
-		return "", fmt.Errorf(
-			"YouTube rejected the current authentication cookie: %w",
-			err,
-		)
+	if lastErr == nil {
+		lastErr = errors.New("YouTube download failed")
 	}
 
-	if err != nil {
-		return "", err
-	}
-
-	if downloadedPathStr == "" {
-		return "", fmt.Errorf(
-			"no output path was returned for %s",
-			videoID,
-		)
-	}
-
-	if _, err := os.Stat(downloadedPathStr); os.IsNotExist(err) {
-		return "", fmt.Errorf(
-			"the file was not found at the reported path: %s",
-			downloadedPathStr,
-		)
-	}
-
-	return downloadedPathStr, nil
+	return "", lastErr
 }
 
 // getCookieFile retrieves the path to a cookie file from the configured list.
