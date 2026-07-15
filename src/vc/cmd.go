@@ -98,11 +98,20 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		height = newH
 	}
 
+	videoFPS := 30
+
+	// Local downloaded videos are fully decoded into raw YUV frames.
+	// Use 24 FPS to reduce CPU and pipe pressure without affecting
+	// direct/live stream playback.
+	if !isURL {
+		videoFPS = 24
+	}
+
 	videoDescription := &ntgcalls.VideoDescription{
 		MediaSource: ntgcalls.MediaSourceShell,
 		Width:       int16(width),
 		Height:      int16(height),
-		Fps:         30,
+		Fps:         uint8(videoFPS),
 	}
 
 	var videoCmd strings.Builder
@@ -121,11 +130,19 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		videoCmd.WriteString(filterFlags + " ")
 	}
 
-	videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v error pipe:1",
-		videoDescription.Fps,
-		videoDescription.Width,
-		videoDescription.Height,
-	))
+	if !isURL {
+		videoCmd.WriteString(fmt.Sprintf("-threads 0 -f rawvideo -pix_fmt yuv420p -vf \"fps=%d,scale=%d:%d:flags=fast_bilinear\" -v error pipe:1",
+			videoDescription.Fps,
+			videoDescription.Width,
+			videoDescription.Height,
+		))
+	} else {
+		videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v error pipe:1",
+			videoDescription.Fps,
+			videoDescription.Width,
+			videoDescription.Height,
+		))
+	}
 	videoDescription.Input = videoCmd.String()
 
 	return ntgcalls.MediaDescription{
