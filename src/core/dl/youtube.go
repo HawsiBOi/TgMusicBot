@@ -356,7 +356,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 
 		ctx, cancel := context.WithTimeout(
 			context.Background(),
-			8*time.Second,
+			20*time.Second,
 		)
 		defer cancel()
 
@@ -419,7 +419,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 	}
 
 	slog.Info(
-		"[YouTube] Trying guest direct resolve",
+		"[YouTube] Trying cookie-first direct resolve",
 		"video_id", videoID,
 		"video", video,
 	)
