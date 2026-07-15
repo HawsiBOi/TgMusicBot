@@ -28,7 +28,7 @@ fi
 if [[ "$MODE" == "audio" ]]; then
   yt-dlp \
     "${YTDLP_ARGS[@]}" \
-    -f "18/best[height<=720][ext=mp4]" \
+    -f "140/bestaudio[ext=m4a]/bestaudio" \
     -o - \
     "$URL" |
   ffmpeg \
@@ -36,6 +36,7 @@ if [[ "$MODE" == "audio" ]]; then
     -loglevel warning \
     -probesize 512K \
     -analyzeduration 1000000 \
+    -re \
     -i pipe:0 \
     -vn \
     -f s16le \
@@ -46,7 +47,7 @@ if [[ "$MODE" == "audio" ]]; then
 elif [[ "$MODE" == "video" ]]; then
   yt-dlp \
     "${YTDLP_ARGS[@]}" \
-    -f "18/best[height<=720][ext=mp4]" \
+    -f "136/bestvideo[height<=720][ext=mp4]/bestvideo[height<=720]" \
     -o - \
     "$URL" |
   ffmpeg \
@@ -54,12 +55,13 @@ elif [[ "$MODE" == "video" ]]; then
     -loglevel error \
     -probesize 512K \
     -analyzeduration 1000000 \
+    -re \
     -i pipe:0 \
     -an \
     -f rawvideo \
     -r 30 \
     -pix_fmt yuv420p \
-    -vf "scale=1280:720" \
+    -vf "scale=1280:720:flags=lanczos" \
     pipe:1
 
 else
