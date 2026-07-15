@@ -11,30 +11,13 @@ var isURLRegex = regexp.MustCompile(`^https?://`)
 
 const ytDlpPipePrefix = "|||HAWSI_YTDLP_PIPE|||"
 
-func buildYouTubePipe(videoID string, cookieFile string) string {
-	videoURL := "https://www.youtube.com/watch?v=" + videoID
-
-	var cmd strings.Builder
-
-	cmd.WriteString("yt-dlp ")
-	cmd.WriteString("--quiet --no-warnings ")
-	cmd.WriteString("--no-playlist --geo-bypass ")
-	cmd.WriteString("--retries 0 --extractor-retries 0 ")
-	cmd.WriteString("--socket-timeout 10 ")
-	cmd.WriteString("--concurrent-fragments 8 ")
-	cmd.WriteString(`--js-runtimes "deno:/usr/local/bin/deno" `)
-	cmd.WriteString(`--extractor-args "youtubepot-bgutilhttp:base_url=http://bgutil-ytdlp-pot-provider.railway.internal:4416" `)
-	cmd.WriteString(`--extractor-args "youtube:player_client=mweb;player_js_version=actual" `)
-
-	if cookieFile != "" {
-		cmd.WriteString(fmt.Sprintf("--cookies %q ", cookieFile))
-	}
-
-	cmd.WriteString(`-f "18/best[height<=720][ext=mp4]" `)
-	cmd.WriteString("-o - ")
-	cmd.WriteString(fmt.Sprintf("%q", videoURL))
-
-	return cmd.String()
+func buildYouTubePipe(mode string, videoID string, cookieFile string) string {
+	return fmt.Sprintf(
+		"bash ./youtube_pipe.sh %q %q %q",
+		mode,
+		videoID,
+		cookieFile,
+	)
 }
 
 func appendGoogleVideoHeaders(cmd *strings.Builder, mediaPath string) {
@@ -58,19 +41,25 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 
 	isYouTubePipe := strings.HasPrefix(filePath, ytDlpPipePrefix)
 	var youtubePipe string
+	var youtubeVideoID string
+	var youtubeCookieFile string
 
 	if isYouTubePipe {
 		payload := strings.TrimPrefix(filePath, ytDlpPipePrefix)
 		parts := strings.SplitN(payload, "|||", 2)
 
-		videoID := strings.TrimSpace(parts[0])
-		cookieFile := ""
+		youtubeVideoID = strings.TrimSpace(parts[0])
+		youtubeCookieFile = ""
 
 		if len(parts) == 2 {
-			cookieFile = strings.TrimSpace(parts[1])
+			youtubeCookieFile = strings.TrimSpace(parts[1])
 		}
 
-		youtubePipe = buildYouTubePipe(videoID, cookieFile)
+		youtubePipe = buildYouTubePipe(
+			"audio",
+			youtubeVideoID,
+			youtubeCookieFile,
+		)
 	}
 
 	const dualSeparator = "|||HAWSI_DUAL_STREAM|||"
@@ -114,9 +103,8 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 
 	if isYouTubePipe {
 		audioCmd.WriteString("-probesize 512K -analyzeduration 1000000 -i pipe:0 ")
-		audioCmdStr := youtubePipe + " | " + audioCmd.String()
 		audioCmd.Reset()
-		audioCmd.WriteString(audioCmdStr)
+		audioCmd.WriteString(youtubePipe)
 	} else {
 		audioCmd.WriteString("-i " + quotedAudioPath + " ")
 	}
@@ -192,9 +180,12 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 
 	if isYouTubePipe {
 		videoCmd.WriteString("-probesize 512K -analyzeduration 1000000 -i pipe:0 ")
-		videoCmdStr := youtubePipe + " | " + videoCmd.String()
 		videoCmd.Reset()
-		videoCmd.WriteString(videoCmdStr)
+		videoCmd.WriteString(buildYouTubePipe(
+			"video",
+			youtubeVideoID,
+			youtubeCookieFile,
+		))
 	} else {
 		videoCmd.WriteString(fmt.Sprintf("-i %s ", quotedVideoPath))
 	}
