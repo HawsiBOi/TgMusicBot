@@ -126,7 +126,12 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		}
 	}
 
-	originalWidth, originalHeight := getVideoDimensions(videoPath)
+	originalWidth := 0
+	originalHeight := 0
+
+	if !isYouTubePipe {
+		originalWidth, originalHeight = getVideoDimensions(videoPath)
+	}
 
 	width := 1280
 	height := 720
