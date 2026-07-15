@@ -34,6 +34,10 @@ RUN wget -O /usr/local/bin/yt-dlp \
     https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_linux \
     && chmod +x /usr/local/bin/yt-dlp
 
+RUN mkdir -p /usr/local/bin/yt-dlp-plugins \
+    && wget -O /usr/local/bin/yt-dlp-plugins/bgutil-ytdlp-pot-provider.zip \
+    https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/latest/download/bgutil-ytdlp-pot-provider.zip
+
 RUN curl -fsSL https://deno.land/install.sh | sh \
     && export DENO_INSTALL="/opt/deno" \
     && export PATH="$DENO_INSTALL/bin:$PATH" \
