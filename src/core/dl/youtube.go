@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -308,6 +309,33 @@ func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, e
 	return y.downloadWithYtDlp(info.Id, video)
 }
 
+func validateDirectMediaURL(mediaURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Range", "bytes=0-1")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Referer", "https://www.youtube.com/")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK &&
+		resp.StatusCode != http.StatusPartialContent {
+		return fmt.Errorf("direct media URL returned HTTP %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string, error) {
 	if videoID == "" {
 		return "", errors.New("videoID is empty")
@@ -403,6 +431,14 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 				)
 			}
 
+			if err := validateDirectMediaURL(urls[0]); err != nil {
+				return "", fmt.Errorf("direct video URL preflight failed: %w", err)
+			}
+
+			if err := validateDirectMediaURL(urls[1]); err != nil {
+				return "", fmt.Errorf("direct audio URL preflight failed: %w", err)
+			}
+
 			return urls[0] +
 				"|||HAWSI_DUAL_STREAM|||" +
 				urls[1], nil
@@ -410,6 +446,10 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 
 		if len(urls) == 0 {
 			return "", errors.New("audio stream URL not returned")
+		}
+
+		if err := validateDirectMediaURL(urls[0]); err != nil {
+			return "", fmt.Errorf("direct audio URL preflight failed: %w", err)
 		}
 
 		return urls[0], nil
