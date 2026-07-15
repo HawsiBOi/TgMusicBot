@@ -3,3 +3,4 @@
 !*.go
 !src
 !config
+!youtube_pipe.sh
