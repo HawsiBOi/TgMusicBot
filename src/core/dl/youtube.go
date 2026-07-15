@@ -462,7 +462,12 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		"video", video,
 	)
 
-	streamURL, guestErr := resolve("")
+	cookieFile := y.getCookieFile()
+	if cookieFile == "" {
+		return resolve("")
+	}
+
+	streamURL, guestErr := resolve(cookieFile)
 	if guestErr == nil {
 		return streamURL, nil
 	}
@@ -471,41 +476,7 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 		return "", guestErr
 	}
 
-	cookieFile := y.getCookieFile()
-	if cookieFile == "" {
-		return "", guestErr
-	}
-
-	slog.Info(
-		"[YouTube] Guest resolve failed; trying one cookie",
-		"video_id", videoID,
-		"video", video,
-	)
-
-	slog.Info(
-		"[YouTube] Immediate cookie retry",
-		"video_id", videoID,
-	)
-
-	streamURL, cookieErr := resolve(cookieFile)
-	if cookieErr == nil {
-		return streamURL, nil
-	}
-
-	if isYouTubeBotCheck(cookieErr) {
-		slog.Warn(
-			"[YouTube] Cookie rejected by YouTube",
-			"video_id", videoID,
-			"cookie", cookieFile,
-		)
-
-		return "", fmt.Errorf(
-			"YouTube cookie rejected: %w",
-			cookieErr,
-		)
-	}
-
-	return "", cookieErr
+	return "", guestErr
 }
 
 // buildYtdlpParams constructs the command-line parameters for yt-dlp to download media.
@@ -526,17 +497,16 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		"--extractor-retries", "0",
 		"--continue",
 		"--no-part",
-		"--concurrent-fragments", "1",
+		"--concurrent-fragments", "8",
 		"--socket-timeout", "10",
-		"--throttled-rate", "100K",
-		"--retry-sleep", "1",
 		"--no-write-thumbnail",
 		"--no-write-info-json",
 		"--no-embed-metadata",
 		"--no-embed-chapters",
 		"--no-embed-subs",
 		"--js-runtimes", "deno:/usr/local/bin/deno",
-		"--extractor-args", "youtube:player_js_version=actual",
+		"--extractor-args", "youtubepot-bgutilhttp:base_url=http://bgutil-ytdlp-pot-provider.railway.internal:4416",
+		"--extractor-args", "youtube:player_client=mweb;player_js_version=actual",
 		"-o", outputTemplate,
 	}
 
@@ -544,7 +514,7 @@ func (y *youTubeData) buildYtdlpParams(videoID string, video bool) ([]string, st
 		params = append(
 			params,
 			"-f",
-			"bestvideo[height<=720]+bestaudio/best[height<=720]",
+			"bestvideo[height<=720][vcodec^=avc1]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]",
 			"--merge-output-format",
 			"mp4",
 		)
