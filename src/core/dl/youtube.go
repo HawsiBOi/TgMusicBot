@@ -288,10 +288,12 @@ func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, e
 	}
 
 	slog.Warn(
-		"[YouTube] Direct stream failed; using download fallback",
-		"video_id", info.Id,
-		"video", video,
-		"error", resolveErr,
+		fmt.Sprintf(
+			"[YouTube] DIRECT RESOLVE FAILED video_id=%s video=%v ERROR=%v",
+			info.Id,
+			video,
+			resolveErr,
+		),
 	)
 
 	if !video && y.ApiUrl != "" && y.APIKey != "" {
