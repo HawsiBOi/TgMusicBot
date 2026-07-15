@@ -52,6 +52,9 @@ ENV HOME="/home/app"
 
 COPY --from=builder --chown=app:app /app/main /usr/local/bin/app
 COPY --from=builder --chown=app:app /app/libtdjson.so.* /home/app/
+COPY --from=builder --chown=app:app /app/youtube_pipe.sh /home/app/youtube_pipe.sh
+
+RUN chmod +x /home/app/youtube_pipe.sh
 
 RUN chown -R app:app /opt/deno
 

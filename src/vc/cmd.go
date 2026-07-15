@@ -108,14 +108,16 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 	} else {
 		audioCmd.WriteString("-i " + quotedAudioPath + " ")
 	}
-	if filterFlags != "" {
-		audioCmd.WriteString(filterFlags + " ")
-	}
+	if !isYouTubePipe {
+		if filterFlags != "" {
+			audioCmd.WriteString(filterFlags + " ")
+		}
 
-	audioCmd.WriteString(fmt.Sprintf("-f s16le -ac %d -ar %d -v warning pipe:1",
-		audioDescription.ChannelCount,
-		audioDescription.SampleRate,
-	))
+		audioCmd.WriteString(fmt.Sprintf("-f s16le -ac %d -ar %d -v warning pipe:1",
+			audioDescription.ChannelCount,
+			audioDescription.SampleRate,
+		))
+	}
 	audioDescription.Input = audioCmd.String()
 
 	if !isVideo {
@@ -190,22 +192,24 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 		videoCmd.WriteString(fmt.Sprintf("-i %s ", quotedVideoPath))
 	}
 
-	if filterFlags != "" {
-		videoCmd.WriteString(filterFlags + " ")
-	}
+	if !isYouTubePipe {
+		if filterFlags != "" {
+			videoCmd.WriteString(filterFlags + " ")
+		}
 
-	if !isURL {
-		videoCmd.WriteString(fmt.Sprintf("-threads 0 -f rawvideo -pix_fmt yuv420p -vf \"fps=%d,scale=%d:%d:flags=fast_bilinear\" -v error pipe:1",
-			videoDescription.Fps,
-			videoDescription.Width,
-			videoDescription.Height,
-		))
-	} else {
-		videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v error pipe:1",
-			videoDescription.Fps,
-			videoDescription.Width,
-			videoDescription.Height,
-		))
+		if !isURL {
+			videoCmd.WriteString(fmt.Sprintf("-threads 0 -f rawvideo -pix_fmt yuv420p -vf \"fps=%d,scale=%d:%d:flags=fast_bilinear\" -v error pipe:1",
+				videoDescription.Fps,
+				videoDescription.Width,
+				videoDescription.Height,
+			))
+		} else {
+			videoCmd.WriteString(fmt.Sprintf("-f rawvideo -r %d -pix_fmt yuv420p -vf scale=%d:%d -v error pipe:1",
+				videoDescription.Fps,
+				videoDescription.Width,
+				videoDescription.Height,
+			))
+		}
 	}
 	videoDescription.Input = videoCmd.String()
 

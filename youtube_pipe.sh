@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-MODE="$1"
-VIDEO_ID="$2"
-COOKIE_FILE="$3"
+MODE="${1:-}"
+VIDEO_ID="${2:-}"
+COOKIE_FILE="${3:-}"
 
 URL="https://www.youtube.com/watch?v=${VIDEO_ID}"
 
@@ -37,11 +37,13 @@ if [[ "$MODE" == "audio" ]]; then
     -probesize 512K \
     -analyzeduration 1000000 \
     -i pipe:0 \
+    -vn \
     -f s16le \
     -ac 2 \
     -ar 48000 \
     pipe:1
-else
+
+elif [[ "$MODE" == "video" ]]; then
   yt-dlp \
     "${YTDLP_ARGS[@]}" \
     -f "18/best[height<=720][ext=mp4]" \
@@ -53,9 +55,14 @@ else
     -probesize 512K \
     -analyzeduration 1000000 \
     -i pipe:0 \
+    -an \
     -f rawvideo \
     -r 30 \
     -pix_fmt yuv420p \
-    -vf scale=1280:720 \
+    -vf "scale=1280:720" \
     pipe:1
+
+else
+  echo "Unknown mode: $MODE" >&2
+  exit 2
 fi
