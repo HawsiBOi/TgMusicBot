@@ -352,7 +352,8 @@ func (y *youTubeData) resolveDirectMediaURL(videoID string, video bool) (string,
 			"--retries", "0",
 			"--extractor-retries", "0",
 			"--js-runtimes", "deno:/usr/local/bin/deno",
-			"--extractor-args", "youtube:player_js_version=actual",
+			"--extractor-args", "youtubepot-bgutilhttp:base_url=http://bgutil-ytdlp-pot-provider.railway.internal:4416",
+			"--extractor-args", "youtube:player_client=mweb;player_js_version=actual",
 		}
 
 		if video {
