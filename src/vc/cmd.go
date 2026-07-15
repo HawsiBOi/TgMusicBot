@@ -9,6 +9,15 @@ import (
 
 var isURLRegex = regexp.MustCompile(`^https?://`)
 
+func appendGoogleVideoHeaders(cmd *strings.Builder, mediaPath string) {
+	if !strings.Contains(strings.ToLower(mediaPath), "googlevideo.com") {
+		return
+	}
+
+	cmd.WriteString(`-user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" `)
+	cmd.WriteString(`-headers "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Language: en-us,en;q=0.5\r\nSec-Fetch-Mode: navigate\r\n" `)
+}
+
 // getMediaDescription creates a media description for ntgcalls based on the provided file path, video status, and ffmpeg parameters.
 func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string) ntgcalls.MediaDescription {
 	audioDescription := &ntgcalls.AudioDescription{
@@ -38,6 +47,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 
 	var audioCmd strings.Builder
 	audioCmd.WriteString("ffmpeg ")
+	appendGoogleVideoHeaders(&audioCmd, audioPath)
 	if isAudioURL && !isLiveHLS {
 		audioCmd.WriteString("-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
 	}
@@ -116,6 +126,7 @@ func getMediaDescription(filePath string, isVideo bool, ffmpegParameters string)
 
 	var videoCmd strings.Builder
 	videoCmd.WriteString("ffmpeg ")
+	appendGoogleVideoHeaders(&videoCmd, videoPath)
 
 	if isURL && !isLiveHLS {
 		videoCmd.WriteString("-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2 ")
