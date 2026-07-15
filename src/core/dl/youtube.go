@@ -252,6 +252,17 @@ func isYouTubeBotCheck(err error) bool {
 // downloadTrack handles the download of a track from YouTube.
 func (y *youTubeData) downloadTrack(info utils.TrackInfo, video bool) (string, error) {
 
+	if video {
+		cookieFile := y.getCookieFile()
+
+		slog.Info(
+			"[YouTube] Using yt-dlp streaming pipe",
+			"video_id", info.Id,
+		)
+
+		return "|||HAWSI_YTDLP_PIPE|||" + info.Id + "|||" + cookieFile, nil
+	}
+
 	resolveStart := time.Now()
 
 	streamURL, resolveErr := y.resolveDirectMediaURL(info.Id, video)
