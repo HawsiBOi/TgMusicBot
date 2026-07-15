@@ -36,6 +36,7 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"time"
 
 	td "github.com/AshokShau/gotdbot"
 )
@@ -303,9 +304,33 @@ func (c *TelegramCalls) RegisterHandlers(client *td.Client) {
 				return
 			}
 
-			if err := c.PlayNext(client, chatID); err != nil {
-				call.App.Logger.Warnf("[OnStreamEnd] Failed to play the song: %v", err)
+			playing := cache.ChatCache.GetPlayingTrack(chatID)
+			if playing == nil {
+				call.App.Logger.Warnf(
+					"[OnStreamEnd] Ignoring audio end with no active track: chat=%d device=%v",
+					chatID,
+					device,
+				)
+				return
 			}
+
+			go func(expectedTrack *utils.CachedTrack) {
+				time.Sleep(2 * time.Second)
+
+				current := cache.ChatCache.GetPlayingTrack(chatID)
+				if current != expectedTrack {
+					call.App.Logger.Warnf(
+						"[OnStreamEnd] Ignoring stale audio end: chat=%d device=%v",
+						chatID,
+						device,
+					)
+					return
+				}
+
+				if err := c.PlayNext(client, chatID); err != nil {
+					call.App.Logger.Warnf("[OnStreamEnd] Failed to play the song: %v", err)
+				}
+			}(playing)
 		})
 
 		_, err := call.App.SendMessage(client.Me.Usernames.EditableUsername, "/start")
